@@ -209,12 +209,6 @@ const DEFAULT_PLANS = [
   },
 ];
 
-const IMAGE_SET = {
-  heroMain: 'https://source.unsplash.com/featured/2400x1600/?archery,athlete',
-  heroAltOne: 'https://source.unsplash.com/featured/1600x1200/?olympics,training',
-  heroAltTwo: 'https://source.unsplash.com/featured/1600x1200/?weightlifting,athlete',
-};
-
 const FALLBACK_IMAGE =
   'https://source.unsplash.com/featured/1600x1200/?archery,olympics';
 
@@ -339,34 +333,76 @@ export default function Landing() {
       >
         <div className="hero-ornaments" aria-hidden="true">
           <svg className="hero-ornament hero-ornament-left" viewBox="0 0 200 200">
-            <circle cx="100" cy="100" r="90" fill="rgba(247, 201, 72, 0.18)" />
-            <circle cx="100" cy="100" r="60" fill="rgba(247, 201, 72, 0.12)" />
+            <circle cx="100" cy="100" r="90" fill="rgba(61, 169, 252, 0.16)" />
+            <circle cx="100" cy="100" r="60" fill="rgba(247, 201, 72, 0.18)" />
           </svg>
           <svg className="hero-ornament hero-ornament-right" viewBox="0 0 240 240">
             <path
               d="M32 40C88 12 152 4 208 32C232 44 236 84 208 108C152 156 92 188 40 208C16 216 4 196 12 176C32 124 44 88 32 40Z"
-              fill="rgba(17, 17, 17, 0.08)"
+              fill="rgba(255, 127, 80, 0.14)"
             />
           </svg>
         </div>
+        <div className="hero-flight-path" aria-hidden="true">
+          <span className="hero-flight-trail" />
+          <span className="hero-flight-burst" />
+          <svg className="hero-flight-arrow" viewBox="0 0 92 24" fill="none">
+            <defs>
+              <linearGradient id="heroArrowStroke" x1="2" y1="12" x2="88" y2="12" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#1d4ed8" />
+                <stop offset="0.55" stopColor="#22d3ee" />
+                <stop offset="1" stopColor="#f59e0b" />
+              </linearGradient>
+            </defs>
+            <path d="M2 12H72" stroke="url(#heroArrowStroke)" strokeWidth="4" strokeLinecap="round" />
+            <path d="M68 4L90 12L68 20" fill="#f59e0b" />
+            <path d="M14 6L2 12L14 18" stroke="#1f2937" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
         <div className="hero-target" aria-hidden="true">
-          <svg viewBox="0 0 120 120">
-            <circle cx="60" cy="60" r="56" fill="rgba(247, 201, 72, 0.12)" stroke="#111111" strokeWidth="2" />
-            <circle cx="60" cy="60" r="36" fill="rgba(247, 201, 72, 0.2)" stroke="#111111" strokeWidth="2" />
-            <circle cx="60" cy="60" r="16" fill="#111111" />
+          <svg viewBox="0 0 180 180">
+            <circle cx="90" cy="90" r="84" fill="rgba(255, 255, 255, 0.76)" stroke="rgba(15, 23, 42, 0.08)" strokeWidth="8" />
+            <circle cx="90" cy="90" r="72" fill="#0f172a" opacity="0.08" />
+            <circle cx="90" cy="90" r="60" fill="#0f172a" />
+            <circle cx="90" cy="90" r="46" fill="#26c6da" />
+            <circle cx="90" cy="90" r="32" fill="#ff7f50" />
+            <circle cx="90" cy="90" r="18" fill="#ffd166" />
+            <circle cx="90" cy="90" r="7" fill="#ffffff" />
+            <path d="M90 14V38M90 142V166M14 90H38M142 90H166" stroke="rgba(15, 23, 42, 0.22)" strokeWidth="5" strokeLinecap="round" />
           </svg>
         </div>
         <div className="hero-archer" aria-hidden="true">
-          <svg viewBox="0 0 260 200" fill="none" stroke="#111111" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="70" cy="45" r="12" fill="#111111" />
-            <path d="M70 58 L70 110" />
-            <path d="M70 80 L110 70" />
-            <path d="M70 80 L110 110" />
-            <path d="M110 70 Q160 90 110 110" />
-            <g className="archer-arrow">
-              <line x1="110" y1="90" x2="180" y2="90" />
-              <polygon points="180,90 170,84 170,96" fill="#111111" stroke="none" />
-            </g>
+          <svg viewBox="0 0 420 320" fill="none">
+            <defs>
+              <linearGradient id="archerBodyGradient" x1="108" y1="92" x2="228" y2="218" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#2563eb" />
+                <stop offset="1" stopColor="#06b6d4" />
+              </linearGradient>
+              <linearGradient id="archerLegGradient" x1="120" y1="160" x2="208" y2="278" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#0f172a" />
+                <stop offset="1" stopColor="#1e3a8a" />
+              </linearGradient>
+              <linearGradient id="archerBowGradient" x1="248" y1="48" x2="288" y2="210" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#ffd166" />
+                <stop offset="1" stopColor="#ff7f50" />
+              </linearGradient>
+            </defs>
+            <ellipse cx="164" cy="286" rx="124" ry="24" fill="rgba(15, 23, 42, 0.12)" />
+            <path d="M112 110C132 92 168 90 196 108L214 148C198 168 166 178 126 170L108 136Z" fill="url(#archerBodyGradient)" />
+            <path d="M126 168C158 176 184 174 204 160L194 272H164L160 212L134 272H106L116 196Z" fill="url(#archerLegGradient)" />
+            <circle cx="126" cy="78" r="24" fill="#ffd8c2" />
+            <path d="M104 70C110 44 152 42 158 74C144 66 126 66 104 70Z" fill="#0f172a" />
+            <path d="M118 102L100 136" stroke="#0f172a" strokeWidth="12" strokeLinecap="round" />
+            <path d="M174 126C214 104 250 100 276 112" stroke="#0f172a" strokeWidth="14" strokeLinecap="round" />
+            <path d="M154 144C204 178 226 190 246 202" stroke="#0f172a" strokeWidth="13" strokeLinecap="round" />
+            <path d="M130 176L90 214" stroke="#0f172a" strokeWidth="13" strokeLinecap="round" />
+            <path d="M178 176L214 214" stroke="#0f172a" strokeWidth="13" strokeLinecap="round" />
+            <path d="M286 56C250 108 250 152 286 206" stroke="url(#archerBowGradient)" strokeWidth="10" strokeLinecap="round" />
+            <path d="M286 56C260 92 260 164 286 206" stroke="rgba(255,255,255,0.45)" strokeWidth="3" strokeLinecap="round" />
+            <path d="M262 86C262 124 262 152 262 184" stroke="#fff7df" strokeWidth="2.5" strokeLinecap="round" />
+            <path d="M198 126L262 126" stroke="#f8fafc" strokeWidth="4" strokeLinecap="round" />
+            <path d="M252 118L276 126L252 134" fill="#f59e0b" />
+            <circle cx="262" cy="126" r="5" fill="#0f172a" />
           </svg>
         </div>
         <motion.div className="hero-copy" variants={stagger}>
@@ -393,26 +429,76 @@ export default function Landing() {
           </motion.div>
         </motion.div>
         <motion.div className="hero-media" variants={fadeUp}>
-          <div className="hero-screen">
-            <img src={IMAGE_SET.heroMain} alt="Athlete training" loading="lazy" onError={handleImageError} />
-            <div className="hero-metrics">
+          <div className="hero-console">
+            <div className="hero-console-head">
               <div>
-                <strong>Live Tracking</strong>
-                <div>Posture + angles</div>
+                <span className="hero-console-kicker">Live session intelligence</span>
+                <h3>Real-time coaching cockpit</h3>
               </div>
-              <div>
-                <strong>Session Score</strong>
-                <div>0-100 performance</div>
+              <span className="hero-console-score">92/100</span>
+            </div>
+            <div className="hero-console-grid">
+              <article className="hero-console-card accent">
+                <p>Tracking Quality</p>
+                <strong>96%</strong>
+                <span>Full body locked</span>
+              </article>
+              <article className="hero-console-card">
+                <p>Correction Focus</p>
+                <strong>Draw Elbow</strong>
+                <span>Raise 4 degrees</span>
+              </article>
+              <article className="hero-console-card">
+                <p>Rep Count</p>
+                <strong>18</strong>
+                <span>Best rep: 88</span>
+              </article>
+              <article className="hero-console-card accent-soft">
+                <p>Camera Intel</p>
+                <strong>Sharp / Good</strong>
+                <span>Lighting optimized</span>
+              </article>
+            </div>
+            <div className="hero-console-chart">
+              <div className="hero-console-chart-head">
+                <span>Session score trend</span>
+                <strong>+18%</strong>
               </div>
-              <div>
-                <strong>AI Coach</strong>
-                <div>Real-time guidance</div>
-              </div>
+              <svg viewBox="0 0 320 132" preserveAspectRatio="none" aria-hidden="true">
+                <path
+                  d="M0 98C24 100 30 92 52 88C76 82 92 72 116 76C136 78 154 62 174 56C196 48 218 60 240 46C264 32 286 18 320 22"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.18)"
+                  strokeWidth="18"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M0 98C24 100 30 92 52 88C76 82 92 72 116 76C136 78 154 62 174 56C196 48 218 60 240 46C264 32 286 18 320 22"
+                  fill="none"
+                  stroke="#7dd3fc"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                />
+                <circle cx="240" cy="46" r="8" fill="#ff7f50" />
+                <circle cx="240" cy="46" r="16" fill="rgba(255, 127, 80, 0.18)" />
+                <circle cx="320" cy="22" r="8" fill="#ffd166" />
+                <circle cx="320" cy="22" r="16" fill="rgba(255, 209, 102, 0.18)" />
+              </svg>
+            </div>
+            <div className="hero-console-note">
+              <span>AI Coach</span>
+              <p>Anchor stays stable. Keep shoulders level through release for cleaner follow-through.</p>
             </div>
           </div>
-          <div className="hero-stack">
-            <img src={IMAGE_SET.heroAltOne} alt="Training detail" loading="lazy" onError={handleImageError} />
-            <img src={IMAGE_SET.heroAltTwo} alt="Coach detail" loading="lazy" onError={handleImageError} />
+          <div className="hero-float-card hero-float-card-left">
+            <small>Best Rep</small>
+            <strong>88 / 100</strong>
+            <span>Balanced release</span>
+          </div>
+          <div className="hero-float-card hero-float-card-right">
+            <small>Latency</small>
+            <strong>34 ms</strong>
+            <span>Live correction ready</span>
           </div>
         </motion.div>
       </motion.section>
