@@ -5,6 +5,8 @@ export default function DataTable({
   columns,
   rows,
   emptyText,
+  emptyActionLabel,
+  emptyActionHref,
   onRowClick = null,
   selectedRowId = '',
 }) {
@@ -12,7 +14,12 @@ export default function DataTable({
     <section className="panel">
       {title ? <h2 className="panel-title">{title}</h2> : null}
       {!rows?.length ? (
-        <EmptyState title="No records yet" description={emptyText || 'Data will appear here.'} />
+        <EmptyState
+          title="No records yet"
+          description={emptyText || 'Data will appear here.'}
+          actionLabel={emptyActionLabel}
+          actionHref={emptyActionHref}
+        />
       ) : (
         <div className="table-wrap">
           <table>

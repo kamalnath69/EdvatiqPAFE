@@ -137,6 +137,12 @@ export default function StudentDashboard() {
       title="Athlete Dashboard"
       subtitle="Review your posture sessions, trends and active rule profile."
       sections={sections}
+      heroStats={[
+        { label: 'Sessions Logged', value: sessions.data.length },
+        { label: 'Sports Practiced', value: new Set(sessions.data.map((s) => s.sport)).size },
+        { label: 'Feedback Points', value: feedbackCount },
+      ]}
+      heroNote="Athlete progress view"
     >
       {(section) => (
         <>
@@ -251,6 +257,8 @@ export default function StudentDashboard() {
                     title="Your Sessions"
                     rows={filteredSessionRows}
                     emptyText="You do not have sessions yet."
+                    emptyActionLabel="Go To Support"
+                    emptyActionHref="/support"
                     onRowClick={(row) => setSelectedSessionId(row.id)}
                     selectedRowId={selectedSessionId}
                     columns={[
@@ -311,6 +319,7 @@ export default function StudentDashboard() {
               token={token}
               defaultSport={user?.assigned_sport || 'Archery'}
               defaultStudent={user?.username || ''}
+              canSaveSession
               enforceAssignedSport
             />
           ) : null}

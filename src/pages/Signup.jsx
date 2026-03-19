@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { createOrder, listPlans, verifyPayment } from '../services/billingApi';
-import { loginRequest, requestSignupVerification, verifySignupEmail } from '../services/authApi';
+import {
+  loginRequest,
+  requestSignupVerification,
+  verifySignupEmail,
+} from '../services/authApi';
 import { useToast } from '../hooks/useToast';
 import { getErrorMessage } from '../services/httpError';
 import FormField from '../components/ui/FormField';
@@ -28,16 +32,16 @@ export default function Signup() {
   const navigate = useNavigate();
   const { pushToast } = useToast();
   const [plans, setPlans] = useState([]);
-  const [emailSent, setEmailSent] = useState(false);
-  const [emailVerified, setEmailVerified] = useState(false);
+  const [sentEmail, setSentEmail] = useState('');
+  const [verifiedEmail, setVerifiedEmail] = useState('');
   const planCode = query.get('plan') || '';
   const plan = plans.find((p) => p.code === planCode);
-  const lastEmailRef = useRef('');
 
   const {
     register,
     handleSubmit,
-    watch,
+    control,
+    getValues,
     setValue,
     formState: { errors, isSubmitting },
   } = useForm({
@@ -50,6 +54,7 @@ export default function Signup() {
       org_name: '',
     },
   });
+  const watchedEmail = useWatch({ control, name: 'email' });
 
   useEffect(() => {
     async function load() {
@@ -63,25 +68,23 @@ export default function Signup() {
     load();
   }, [pushToast]);
 
-  const watchedEmail = watch('email');
-  useEffect(() => {
-    if (lastEmailRef.current && lastEmailRef.current !== watchedEmail) {
-      setEmailSent(false);
-      setEmailVerified(false);
-      setValue('email_code', '');
-    }
-    lastEmailRef.current = watchedEmail;
-  }, [watchedEmail, setValue]);
+  const normalizedEmail = (watchedEmail || '').trim().toLowerCase();
+  const emailSent = normalizedEmail !== '' && sentEmail === normalizedEmail;
+  const emailVerified = normalizedEmail !== '' && verifiedEmail === normalizedEmail;
 
   const handleSendCode = async () => {
-    const email = (watchedEmail || '').trim();
+    const email = normalizedEmail;
     if (!email) {
       pushToast({ type: 'info', message: 'Enter your email to receive a code.' });
       return;
     }
     try {
       await requestSignupVerification(email);
-      setEmailSent(true);
+      setSentEmail(email);
+      if (verifiedEmail && verifiedEmail !== email) {
+        setVerifiedEmail('');
+        setValue('email_code', '');
+      }
       pushToast({ type: 'success', message: 'Verification code sent to your email.' });
     } catch (err) {
       pushToast({ type: 'error', message: getErrorMessage(err, 'Unable to send verification code.') });
@@ -89,15 +92,16 @@ export default function Signup() {
   };
 
   const handleVerifyCode = async () => {
-    const email = (watchedEmail || '').trim();
-    const code = (watch('email_code') || '').trim();
+    const email = normalizedEmail;
+    const code = (getValues('email_code') || '').trim();
     if (!email || !code) {
       pushToast({ type: 'info', message: 'Enter email and verification code.' });
       return;
     }
     try {
       await verifySignupEmail(email, code);
-      setEmailVerified(true);
+      setSentEmail(email);
+      setVerifiedEmail(email);
       pushToast({ type: 'success', message: 'Email verified. You can proceed to payment.' });
     } catch (err) {
       pushToast({ type: 'error', message: getErrorMessage(err, 'Invalid or expired code.') });
@@ -157,17 +161,6 @@ export default function Signup() {
               localStorage.setItem('token', token.access_token);
               navigate('/dashboard');
             } catch (loginErr) {
-              const detail = loginErr?.response?.data?.detail || '';
-              if (typeof detail === 'string' && detail.toLowerCase().includes('email not verified')) {
-                try {
-                  await requestEmailVerification(values.username.trim());
-                } catch {
-                  // ignore resend failures
-                }
-                pushToast({ type: 'info', message: 'Email verification required. Code sent to your inbox.' });
-                navigate(`/verify-email?identity=${encodeURIComponent(values.username.trim())}`);
-                return;
-              }
               pushToast({ type: 'error', message: getErrorMessage(loginErr, 'Unable to sign in after payment.') });
             }
           } catch (err) {
@@ -195,7 +188,11 @@ export default function Signup() {
       <section className="auth-brand">
         <p className="auth-chip">Plan Checkout</p>
         <h1>Set up your {plan?.name || 'plan'}.</h1>
-        <p>Complete payment to activate your workspace instantly.</p>
+        <p>
+          {plan
+            ? 'Complete payment to activate your workspace instantly.'
+            : 'Choose a plan first, then finish signup and payment in one flow.'}
+        </p>
         <div className="metrics-grid compact">
           <article className="metric-tile">
             <p>Plan</p>
@@ -206,6 +203,23 @@ export default function Signup() {
             <strong>{plan?.plan_type || '--'}</strong>
           </article>
         </div>
+        {!plan ? (
+          <div className="panel" style={{ marginTop: '1rem' }}>
+            <h3 className="panel-title">Available plans</h3>
+            <div className="metrics-grid compact">
+              {plans.map((item) => (
+                <button
+                  key={item.code}
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => navigate(`/signup?plan=${item.code}`)}
+                >
+                  {item.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <Link to="/pricing" className="ghost-button">Back to Pricing</Link>
       </section>
 

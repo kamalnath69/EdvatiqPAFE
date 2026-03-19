@@ -17,6 +17,14 @@ const FALLBACK_FEATURES = {
   org_pro: ['All Org Basic features', 'AI coach chat', 'AI analytics suite'],
 };
 
+const PLAN_ROWS = [
+  ['Live posture tracking', 'Yes', 'Yes', 'Yes', 'Yes'],
+  ['Session history + scoring', 'Yes', 'Yes', 'Yes', 'Yes'],
+  ['AI coach chat', '-', 'Yes', '-', 'Yes'],
+  ['Student + staff management', '-', '-', 'Yes', 'Yes'],
+  ['Advanced analytics', '-', 'Yes', '-', 'Yes'],
+];
+
 function getPlanFeatures(plan) {
   if (plan?.features?.length) return plan.features;
   return FALLBACK_FEATURES[plan?.code] || [];
@@ -95,6 +103,51 @@ export default function Pricing() {
             </article>
           ))}
         </div>
+      </section>
+
+      <section className="pricing-section">
+        <div className="pricing-compare-card">
+          <div className="section-head compact">
+            <span className="section-kicker">Comparison</span>
+            <h3>Choose the right level of capability</h3>
+            <p>Use Pro tiers for AI-led workflows and organization tiers for team management.</p>
+          </div>
+          <div className="plan-compare-table">
+            <div className="plan-compare-head">
+              <span>Capability</span>
+              <span>Personal Basic</span>
+              <span>Personal Pro</span>
+              <span>Org Basic</span>
+              <span>Org Pro</span>
+            </div>
+            {PLAN_ROWS.map((row) => (
+              <div key={row[0]} className="plan-compare-row">
+                {row.map((cell, index) => (
+                  <span key={`${row[0]}-${index}`}>{cell}</span>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="pricing-section pricing-assurance-grid">
+        <article className="pricing-assurance-card">
+          <h3>What buyers expect</h3>
+          <ul>
+            <li><CheckCircle2 size={16} />Clear role-based access for admins, staff, and athletes</li>
+            <li><CheckCircle2 size={16} />Visible legal pages and support channels</li>
+            <li><CheckCircle2 size={16} />A guided path from demo to rollout</li>
+          </ul>
+        </article>
+        <article className="pricing-assurance-card">
+          <h3>Best fit for INR 999+</h3>
+          <p>Choose Pro when you want the platform to act like a daily coaching system, not just a tracking utility.</p>
+          <div className="cta-actions">
+            <Link className="primary-button" to="/book-demo">Book a Demo</Link>
+            <Link className="ghost-button" to="/support">Talk to Support</Link>
+          </div>
+        </article>
       </section>
     </div>
   );

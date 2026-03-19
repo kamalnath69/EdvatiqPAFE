@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react';
-import { Command, LogOut, Moon, Search, Sun } from 'lucide-react';
+import { Command, LogOut, Moon, Search, Sun, Sparkles } from 'lucide-react';
 import { AuthContext } from '../../context/auth-context';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -27,7 +27,13 @@ export default function Topbar({ title, subtitle, activeSectionLabel = 'Overview
     <header className="topbar">
       <div className="topbar-left">
         <p className="topbar-breadcrumb">Workspace / {activeSectionLabel}</p>
-        <h1>{title}</h1>
+        <div className="topbar-title-row">
+          <h1>{title}</h1>
+          <span className="topbar-section-pill">
+            <Sparkles size={14} />
+            {activeSectionLabel}
+          </span>
+        </div>
         <p>{subtitle}</p>
       </div>
       <div className="topbar-right">

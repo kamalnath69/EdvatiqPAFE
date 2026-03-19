@@ -21,7 +21,7 @@ export default function VerifyEmail() {
   const {
     register,
     handleSubmit,
-    watch,
+    getValues,
     setValue,
     formState: { errors, isSubmitting },
   } = useForm({ defaultValues: { identity: identityFromQuery, code: '' } });
@@ -39,7 +39,7 @@ export default function VerifyEmail() {
   }, [identityFromQuery, pushToast]);
 
   const onSend = async () => {
-    const identity = watch('identity');
+    const identity = getValues('identity');
     if (!identity?.trim()) {
       pushToast({ type: 'info', message: 'Enter your username or email first.' });
       return;

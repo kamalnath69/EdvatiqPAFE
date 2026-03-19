@@ -249,6 +249,12 @@ export default function AdminDashboard() {
       title="Admin Command Center"
       subtitle="Manage users, academies, access and performance records."
       sections={sections}
+      heroStats={[
+        { label: 'Academies', value: academies.data.length },
+        { label: 'Platform Users', value: users.data.length },
+        { label: 'Lead Inbox', value: leadRows.length },
+      ]}
+      heroNote="Platform governance"
     >
       {(section) => (
         <>
@@ -289,6 +295,8 @@ export default function AdminDashboard() {
               <DataTable
                 title="Latest Sessions"
                 emptyText="No sessions available yet."
+                emptyActionLabel="Review Pricing"
+                emptyActionHref="/pricing"
                 rows={sessions.data.slice(0, 8).map((s, idx) => ({ ...s, id: `${s.student}-${idx}` }))}
                 columns={[
                   { key: 'student', label: 'Student' },
@@ -352,6 +360,8 @@ export default function AdminDashboard() {
                 title="Academies"
                 rows={academyRows}
                 emptyText="Create your first academy."
+                emptyActionLabel="Book a Demo"
+                emptyActionHref="/book-demo"
                 columns={[
                   { key: 'academy_id', label: 'Academy ID' },
                   { key: 'name', label: 'Name' },
@@ -412,6 +422,8 @@ export default function AdminDashboard() {
                 title="Users"
                 rows={users.data.map((u) => ({ ...u, id: u.username }))}
                 emptyText="No users available."
+                emptyActionLabel="Book a Demo"
+                emptyActionHref="/book-demo"
                 columns={[
                   { key: 'username', label: 'Username' },
                   {
@@ -609,6 +621,8 @@ export default function AdminDashboard() {
                 title="Leads"
                 rows={leadRows}
                 emptyText="No leads yet."
+                emptyActionLabel="Visit Support"
+                emptyActionHref="/support"
                 columns={[
                   { key: 'kind', label: 'Type' },
                   { key: 'name', label: 'Name' },

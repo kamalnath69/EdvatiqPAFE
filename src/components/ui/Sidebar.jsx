@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { Activity, ChevronsLeft, ChevronsRight, ShieldCheck } from 'lucide-react';
+import { Activity, ChevronsLeft, ChevronsRight, ShieldCheck, Sparkles } from 'lucide-react';
 
 export default function Sidebar({ sections = [], activeSection, onChange, collapsed = false, onToggleCollapse }) {
   return (
@@ -11,12 +11,20 @@ export default function Sidebar({ sections = [], activeSection, onChange, collap
         <div className={clsx(collapsed && 'is-hidden')}>
           <p className="brand-kicker">Performance</p>
           <p className="brand-name">Edvatiq</p>
+          <span className="brand-badge">
+            <Sparkles size={12} />
+            Camera-first coaching
+          </span>
         </div>
         <button type="button" className="collapse-hitbox" onClick={onToggleCollapse} aria-label="Toggle sidebar">
           <span className="icon-button collapse-btn-icon">
             {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
           </span>
         </button>
+      </div>
+
+      <div className={clsx('sidebar-intro', collapsed && 'is-hidden')}>
+        <p>Unified coaching, athlete review, and academy operations in one workspace.</p>
       </div>
 
       <nav className="side-nav">

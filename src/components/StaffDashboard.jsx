@@ -370,6 +370,12 @@ export default function StaffDashboard() {
       title="Staff Performance Desk"
       subtitle="Create sessions, coach live posture, and manage student-specific sport rules."
       sections={sections}
+      heroStats={[
+        { label: 'Sessions In View', value: filteredSessionRows.length },
+        { label: 'Student Roster', value: students.length },
+        { label: 'Average Score', value: avgSessionScore },
+      ]}
+      heroNote="Live coaching workflow"
     >
       {(section) => (
         <>
@@ -611,6 +617,8 @@ export default function StaffDashboard() {
                     title="Fetched Session Records"
                     rows={filteredSessionRows}
                     emptyText="No sessions match filters."
+                    emptyActionLabel="Start From Live Coach"
+                    emptyActionHref="/dashboard"
                     onRowClick={(row) => setSelectedSessionId(row.id)}
                     selectedRowId={selectedSessionId}
                     columns={[

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import FormField from './ui/FormField';
 import Modal from './ui/Modal';
+import LiveCoachAssist from './LiveCoachAssist';
 import { useLivePose } from '../hooks/useLivePose';
 import { createSession } from '../services/sessionsApi';
 import { getErrorMessage } from '../services/httpError';
@@ -191,6 +192,10 @@ export default function LiveTrainer({
   const { pushToast } = useToast();
   const [fullscreen, setFullscreen] = useState(false);
   const [performanceMode, setPerformanceMode] = useState(true);
+  const [liveGuidanceEnabled, setLiveGuidanceEnabled] = useState(() => {
+    const raw = window.localStorage.getItem('live.aiGuidance.enabled');
+    return raw === null ? true : raw === '1';
+  });
   const [customNote, setCustomNote] = useState('');
   const [drillFocus, setDrillFocus] = useState('');
   const [intensityRpe, setIntensityRpe] = useState('');
@@ -203,6 +208,7 @@ export default function LiveTrainer({
   const [fsAnglesOpen, setFsAnglesOpen] = useState(true);
   const [fsCameraOpen, setFsCameraOpen] = useState(true);
   const [fsCalibrateOpen, setFsCalibrateOpen] = useState(false);
+  const [liveGuidanceState, setLiveGuidanceState] = useState(null);
 
   const [overlayXOffsetPct, setOverlayXOffsetPct] = useState(() => {
     const raw = window.localStorage.getItem('live.overlay.xOffsetPct');
@@ -221,19 +227,20 @@ export default function LiveTrainer({
   });
 
   const live = useLivePose();
-  const feedback = useMemo(() => live.analysis?.feedback || [], [live.analysis]);
+  const analysis = live.analysis;
+  const feedback = useMemo(() => analysis?.feedback || [], [analysis]);
   const topFeedback = useMemo(() => feedback.slice(0, 6), [feedback]);
   const angleEntries = useMemo(() => {
-    const raw = live.analysis?.angles || {};
+    const raw = analysis?.angles || {};
     return ANGLE_METRICS.map((item) => {
       const value = raw[item.label];
       return { key: item.id, label: item.label, value: Number.isFinite(Number(value)) ? Number(value) : null };
     }).filter((item) => item.value !== null);
-  }, [live.analysis]);
-  const advanced = useMemo(() => live.analysis?.advanced || {}, [live.analysis]);
-  const cameraIntel = useMemo(() => live.analysis?.camera || {}, [live.analysis]);
-  const framing = useMemo(() => live.analysis?.framing || {}, [live.analysis]);
-  const training = useMemo(() => live.analysis?.training || {}, [live.analysis]);
+  }, [analysis]);
+  const advanced = useMemo(() => analysis?.advanced || {}, [analysis]);
+  const cameraIntel = useMemo(() => analysis?.camera || {}, [analysis]);
+  const framing = useMemo(() => analysis?.framing || {}, [analysis]);
+  const training = useMemo(() => analysis?.training || {}, [analysis]);
   const sessionScore = useMemo(() => {
     const score = Number(training?.session_summary?.session_score);
     return Number.isFinite(score) ? score : null;
@@ -256,7 +263,7 @@ export default function LiveTrainer({
   function buildLiveSessionPayload(endedAtMs) {
     if (!canSaveSession) return null;
     if (!student.trim()) return null;
-    if (!live.analysis?.angles) return null;
+    if (!live.analysis) return null;
 
     const startedAtMs = clockRef.current.startMs || endedAtMs;
     const currentTraining = live.analysis?.training || {};
@@ -265,7 +272,7 @@ export default function LiveTrainer({
     return {
       student: student.trim(),
       sport: live.analysis?.sport || sport,
-      angles: live.analysis.angles,
+      angles: live.analysis?.angles || {},
       feedback: [
         ...feedback.filter(Boolean),
         currentTraining?.rep_count ? `Rep count: ${currentTraining.rep_count}` : null,
@@ -335,18 +342,22 @@ export default function LiveTrainer({
       canvas.style.height = `${h}px`;
       const ctx = canvas.getContext('2d');
       if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawOverlay(canvas, live.analysis, overlayFitMode, overlayXOffsetPct, overlayYOffsetPct, overlayZoomPct);
+      drawOverlay(canvas, analysis, overlayFitMode, overlayXOffsetPct, overlayYOffsetPct, overlayZoomPct);
     };
     resize();
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
-  }, [overlayFitMode, overlayXOffsetPct, overlayYOffsetPct, overlayZoomPct]);
+  }, [analysis, overlayFitMode, overlayXOffsetPct, overlayYOffsetPct, overlayZoomPct]);
 
   useEffect(() => {
-    if (overlayRef.current && live.analysis) {
-      drawOverlay(overlayRef.current, live.analysis, overlayFitMode, overlayXOffsetPct, overlayYOffsetPct, overlayZoomPct);
+    if (overlayRef.current && analysis) {
+      drawOverlay(overlayRef.current, analysis, overlayFitMode, overlayXOffsetPct, overlayYOffsetPct, overlayZoomPct);
     }
-  }, [live.analysis, overlayFitMode, overlayXOffsetPct, overlayYOffsetPct, overlayZoomPct]);
+  }, [analysis, overlayFitMode, overlayXOffsetPct, overlayYOffsetPct, overlayZoomPct]);
+
+  useEffect(() => {
+    window.localStorage.setItem('live.aiGuidance.enabled', liveGuidanceEnabled ? '1' : '0');
+  }, [liveGuidanceEnabled]);
 
   useEffect(() => {
     window.localStorage.setItem('live.overlay.xOffsetPct', String(overlayXOffsetPct));
@@ -615,6 +626,13 @@ export default function LiveTrainer({
               <>
                 <button
                   type="button"
+                  className="live-fs-section-toggle live-fs-toggle-guidance"
+                  onClick={() => setLiveGuidanceEnabled((value) => !value)}
+                >
+                  {liveGuidanceEnabled ? 'AI Guide -' : 'AI Guide +'}
+                </button>
+                <button
+                  type="button"
                   className="live-fs-section-toggle live-fs-toggle-camera"
                   onClick={() => setFsCameraOpen((v) => !v)}
                 >
@@ -738,9 +756,43 @@ export default function LiveTrainer({
                 </FormField>
               </aside>
             ) : null}
+
+            {fullscreen && liveGuidanceEnabled ? (
+              <aside className={`live-fs-drawer live-fs-drawer-left live-fs-drawer-guidance ${liveGuidanceState?.urgency || 'medium'}`}>
+                <h4>Live AI Guidance</h4>
+                <div className="metrics-grid compact">
+                  <article className="metric-tile"><p>Status</p><strong>{liveGuidanceState?.speak_now ? 'Speaking' : 'Monitoring'}</strong></article>
+                  <article className="metric-tile"><p>Phase</p><strong>{training.phase || '--'}</strong></article>
+                  <article className="metric-tile"><p>Reps</p><strong>{training.rep_count ?? 0}</strong></article>
+                  <article className="metric-tile"><p>Score</p><strong>{sessionScore ?? '--'}</strong></article>
+                </div>
+                <div className="live-fs-guidance-card">
+                  <strong>{liveGuidanceState?.cue || 'AI coach is monitoring for the next meaningful change.'}</strong>
+                  <p>{liveGuidanceState?.summary || 'Guidance appears here in fullscreen and stays available while you train.'}</p>
+                </div>
+              </aside>
+            ) : null}
           </div>
         </section>
       </div>
+
+      <LiveCoachAssist
+        liveRunning={live.running}
+        fullscreen={fullscreen}
+        active={liveGuidanceEnabled}
+        sport={analysis?.sport || sport}
+        student={student.trim()}
+        feedback={feedback}
+        angles={analysis?.angles || {}}
+        sessionScore={sessionScore}
+        phase={training.phase || ''}
+        repCount={training.rep_count ?? 0}
+        trackingQuality={advanced.tracking_quality ?? ''}
+        drillFocus={drillFocus}
+        customNote={customNote}
+        pushToast={pushToast}
+        onGuidanceChange={setLiveGuidanceState}
+      />
 
       <section className="panel live-input-panel">
         <div className="panel-header">
@@ -775,6 +827,10 @@ export default function LiveTrainer({
         <label className="check-field live-toggle-row">
           <input type="checkbox" checked={performanceMode} onChange={(e) => setPerformanceMode(e.target.checked)} disabled={live.running} />
           <span>Performance Mode {performanceMode ? 'ON' : 'OFF'}</span>
+        </label>
+        <label className="check-field live-toggle-row">
+          <input type="checkbox" checked={liveGuidanceEnabled} onChange={(e) => setLiveGuidanceEnabled(e.target.checked)} />
+          <span>Live AI Guidance {liveGuidanceEnabled ? 'ON' : 'OFF'}</span>
         </label>
 
         <div className="calibration-grid">

@@ -96,9 +96,6 @@ export default function Login() {
           <Link className="ghost-button" to="/pricing">View Plans</Link>
           <Link className="ghost-button" to="/forgot-password">Forgot Password</Link>
         </div>
-        <div className="auth-links">
-          <Link to="/verify-email">Verify email</Link>
-        </div>
       </section>
     </div>
   );
