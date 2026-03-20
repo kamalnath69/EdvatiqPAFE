@@ -7,11 +7,13 @@ import {
   BarChart3,
   Bot,
   CheckCircle2,
+  Menu,
   Shield,
   Sparkles,
   Star,
   Target,
   TrendingUp,
+  X,
   Zap,
 } from 'lucide-react';
 import { listPlans } from '../services/billingApi';
@@ -282,6 +284,7 @@ export default function Landing() {
   const [heroFlight, setHeroFlight] = useState(null);
   const [flightCycle, setFlightCycle] = useState(0);
   const [demoSubmitted, setDemoSubmitted] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const sectionRefs = useRef({});
   const targetRef = useRef(null);
   const archerRef = useRef(null);
@@ -317,6 +320,7 @@ export default function Landing() {
     if (!node) return;
     node.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setActiveSection(id);
+    setMobileNavOpen(false);
   };
 
   const navItems = useMemo(
@@ -366,6 +370,25 @@ export default function Landing() {
       setActiveSection(id);
     });
   }, [location.hash]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth > 960) {
+        setMobileNavOpen(false);
+      }
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     let timeoutId;
@@ -428,6 +451,14 @@ export default function Landing() {
               <h1>Edvatiq</h1>
             </div>
           </Link>
+          <button
+            type="button"
+            className="landing-mobile-menu-button"
+            onClick={() => setMobileNavOpen((prev) => !prev)}
+            aria-label={mobileNavOpen ? 'Close navigation' : 'Open navigation'}
+          >
+            {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
           <nav className="landing-nav">
             {navItems.map((item) => (
               <button
@@ -449,6 +480,48 @@ export default function Landing() {
           </div>
         </div>
       </header>
+      {mobileNavOpen ? (
+        <div className="landing-mobile-nav-backdrop" onClick={() => setMobileNavOpen(false)}>
+          <aside className="landing-mobile-nav" onClick={(event) => event.stopPropagation()}>
+            <div className="landing-mobile-nav-head">
+              <div className="brand-lockup brand-lockup-mobile">
+                <div className="brand-icon">E</div>
+                <div>
+                  <p className="brand-kicker">Performance Intelligence</p>
+                  <h1>Edvatiq</h1>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="landing-mobile-menu-button"
+                onClick={() => setMobileNavOpen(false)}
+                aria-label="Close navigation"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <nav className="landing-mobile-nav-links">
+              {navItems.map((item) => (
+                <button
+                  key={`mobile-${item.id}`}
+                  type="button"
+                  className={`landing-mobile-link ${item.active ? 'active' : ''}`}
+                  onClick={() => handleNavClick(item.id)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+            <div className="landing-mobile-nav-actions">
+              <Link className="ghost-button" to="/login" onClick={() => setMobileNavOpen(false)}>Login</Link>
+              <button type="button" className="ghost-button" onClick={() => handleNavClick('book-demo')}>Support</button>
+              <button type="button" className="primary-button demo-button" onClick={() => handleNavClick('book-demo')}>
+                Book a Demo <ArrowRight size={18} />
+              </button>
+            </div>
+          </aside>
+        </div>
+      ) : null}
 
       <m.section
         id="hero"

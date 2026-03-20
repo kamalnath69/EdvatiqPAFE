@@ -18,6 +18,7 @@ export default function PageShell({ title, subtitle, sections, children }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [walletSummary, setWalletSummary] = useState(null);
   const [walletCharging, setWalletCharging] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const planAccess = usePlanAccess();
   const dispatch = useAppDispatch();
   const collapsed = useAppSelector((state) => state.ui.sidebarCollapsed);
@@ -50,6 +51,29 @@ export default function PageShell({ title, subtitle, sections, children }) {
     () => (sections || []).filter((item) => !item.sidebarHidden),
     [sections]
   );
+
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (!mobileSidebarOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileSidebarOpen]);
+
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth > 960) {
+        setMobileSidebarOpen(false);
+      }
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const filteredSections = useMemo(() => {
     const q = commandQuery.trim().toLowerCase();
@@ -114,12 +138,17 @@ export default function PageShell({ title, subtitle, sections, children }) {
 
   return (
     <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
+      {mobileSidebarOpen ? (
+        <div className="sidebar-mobile-backdrop" onClick={() => setMobileSidebarOpen(false)} />
+      ) : null}
       <Sidebar
         sections={sidebarSections}
         activeSection={activeSection}
         onChange={setActiveSection}
         collapsed={collapsed}
         onToggleCollapse={() => dispatch(toggleSidebarCollapsed())}
+        mobileOpen={mobileSidebarOpen}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
         walletSummary={walletSummary}
         walletCharging={walletCharging}
         onQuickTopUp={handleQuickTopUp}
@@ -131,6 +160,7 @@ export default function PageShell({ title, subtitle, sections, children }) {
           activeSectionLabel={activeSectionLabel}
           onOpenCommandPalette={() => setCommandOpen(true)}
           onNavigateSection={setActiveSection}
+          onOpenSidebar={() => setMobileSidebarOpen(true)}
           unreadCount={unreadCount}
         />
         <section key={activeSection} className="page-content entrance-rise">
@@ -192,7 +222,11 @@ export default function PageShell({ title, subtitle, sections, children }) {
           </div>
         </div>
       ) : null}
-      <AiCoachChat enabled={planAccess.ai_chat} onWalletChange={setWalletSummary} />
+      <AiCoachChat
+        enabled={planAccess.ai_chat}
+        onWalletChange={setWalletSummary}
+        onOpenSettings={() => setActiveSection('settings')}
+      />
     </div>
   );
 }

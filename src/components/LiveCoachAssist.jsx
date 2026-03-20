@@ -26,6 +26,7 @@ export default function LiveCoachAssist({
   liveRunning,
   fullscreen = false,
   active = true,
+  voiceActive = true,
   sport,
   student,
   feedback = [],
@@ -93,15 +94,22 @@ export default function LiveCoachAssist({
   }, [fullscreen, sport]);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    if (!liveRunning || !active || !voiceActive) {
+      window.speechSynthesis.cancel();
+      lastSpokenCueRef.current = '';
+    }
+  }, [liveRunning, active, voiceActive]);
+
+  useEffect(() => {
     if (onGuidanceChange) onGuidanceChange(guidance);
   }, [guidance, onGuidanceChange]);
 
   async function requestGuidance(manual = false) {
     if (!planAccess.ai_chat) return;
-    if (!active) return;
+    if (!active || !liveRunning) return;
     if (!config?.configured || !config?.live_guidance_enabled) return;
     if (!sport || !student) return;
-    if (!manual && !liveRunning) return;
     const feedbackSet = feedback.filter(Boolean).slice(0, 5);
     if (!manual && feedbackSet.length === 0 && sessionScore == null) return;
 
@@ -131,7 +139,7 @@ export default function LiveCoachAssist({
       lastRequestAtRef.current = now;
       lastSignalKeyRef.current = signal.key;
       setGuidance(resp);
-      if (config.voice_enabled && resp.speak_now && resp.cue && lastSpokenCueRef.current !== resp.cue) {
+      if (voiceActive && config.voice_enabled && resp.speak_now && resp.cue && lastSpokenCueRef.current !== resp.cue) {
         speakCue(resp.cue, config.voice_style);
         lastSpokenCueRef.current = resp.cue;
       }
@@ -172,15 +180,16 @@ export default function LiveCoachAssist({
           {config?.voice_enabled ? (
             <span className="status-badge neutral">
               <Volume2 size={14} />
-              Voice on
+              {voiceActive && liveRunning ? 'Voice on' : 'Voice standby'}
             </span>
           ) : null}
-          {!active ? <span className="status-badge neutral">Session guidance off</span> : null}
+          {!liveRunning ? <span className="status-badge neutral">Waiting for live session</span> : null}
+          {liveRunning && !active ? <span className="status-badge neutral">Session guidance off</span> : null}
           <button
             type="button"
             className="ghost-button"
             onClick={() => requestGuidance(true)}
-            disabled={requesting || loadingConfig || !active}
+            disabled={requesting || loadingConfig || !active || !liveRunning}
           >
             {requesting ? 'Coaching...' : 'Coach Me Now'}
           </button>
@@ -219,7 +228,9 @@ export default function LiveCoachAssist({
             </article>
             <article className="metric-tile">
               <p>Guidance</p>
-              <strong>{active ? (config.live_guidance_enabled ? 'Auto' : 'Manual only') : 'Disabled'}</strong>
+              <strong>
+                {!liveRunning ? 'Idle' : active ? (config.live_guidance_enabled ? 'Auto' : 'Manual only') : 'Disabled'}
+              </strong>
             </article>
             <article className="metric-tile">
               <p>Feedback</p>

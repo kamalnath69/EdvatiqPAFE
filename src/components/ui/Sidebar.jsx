@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { ChevronsLeft, ChevronsRight, Coins, Wallet } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Coins, Wallet, X } from 'lucide-react';
 import { buildRechargePresets } from '../../utils/wallet';
 
 export default function Sidebar({
@@ -8,6 +8,8 @@ export default function Sidebar({
   onChange,
   collapsed = false,
   onToggleCollapse,
+  mobileOpen = false,
+  onCloseMobile,
   walletSummary = null,
   walletCharging = false,
   onQuickTopUp,
@@ -17,7 +19,7 @@ export default function Sidebar({
   const topUpPresets = buildRechargePresets(walletSummary?.suggested_top_up, 2);
 
   return (
-    <aside className="sidebar">
+    <aside className={clsx('sidebar', mobileOpen && 'mobile-open')}>
       <div className="sidebar-top">
         <div className="brand-block">
           <div className="brand-icon">E</div>
@@ -31,6 +33,9 @@ export default function Sidebar({
             {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
           </span>
         </button>
+        <button type="button" className="sidebar-mobile-close" onClick={onCloseMobile} aria-label="Close menu">
+          <X size={18} />
+        </button>
       </div>
 
       <div className={clsx('sidebar-section-label', collapsed && 'is-hidden')}>
@@ -42,7 +47,10 @@ export default function Sidebar({
           <button
             key={item.key}
             type="button"
-            onClick={() => onChange(item.key)}
+            onClick={() => {
+              onChange(item.key);
+              onCloseMobile?.();
+            }}
             className={clsx('side-nav-item', activeSection === item.key && 'active')}
             title={item.label}
           >

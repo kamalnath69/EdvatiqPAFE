@@ -1,5 +1,10 @@
 import api from '../api';
 
+let walletSummaryCache = null;
+let walletSummaryFetchedAt = 0;
+let walletSummaryPromise = null;
+const WALLET_CACHE_TTL_MS = 10000;
+
 export async function getWorkspaceSettings() {
   const resp = await api.get('/settings/me');
   return resp.data;
@@ -186,8 +191,21 @@ export async function getBillingWorkspace() {
 }
 
 export async function getWalletSummary() {
-  const resp = await api.get('/wallet/summary');
-  return resp.data;
+  const now = Date.now();
+  if (walletSummaryCache && now - walletSummaryFetchedAt < WALLET_CACHE_TTL_MS) {
+    return walletSummaryCache;
+  }
+  if (walletSummaryPromise) return walletSummaryPromise;
+  walletSummaryPromise = api.get('/wallet/summary').then((resp) => {
+    walletSummaryCache = resp.data;
+    walletSummaryFetchedAt = Date.now();
+    walletSummaryPromise = null;
+    return resp.data;
+  }).catch((error) => {
+    walletSummaryPromise = null;
+    throw error;
+  });
+  return walletSummaryPromise;
 }
 
 export async function listWalletTransactions(limit = 20) {

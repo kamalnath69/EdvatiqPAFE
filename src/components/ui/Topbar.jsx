@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, Command, LogOut, Moon, Search, Sun } from 'lucide-react';
+import { Bell, Command, LogOut, Menu, Moon, Search, Sun } from 'lucide-react';
 import { useAuthUser } from '../../hooks/useAuthUser';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -18,6 +18,7 @@ export default function Topbar({
   activeSectionLabel = 'Overview',
   onOpenCommandPalette,
   onNavigateSection,
+  onOpenSidebar,
   unreadCount = 0,
 }) {
   const { user, logout } = useAuthUser();
@@ -30,10 +31,22 @@ export default function Topbar({
   }, []);
 
   const avatarLabel = (user?.username || 'U').slice(0, 2).toUpperCase();
+  const profileImage =
+    typeof user?.profile_image === 'string' && user.profile_image.trim()
+      ? user.profile_image.trim()
+      : '';
 
   return (
     <header className="topbar">
       <div className="topbar-left">
+        <button
+          type="button"
+          className="topbar-mobile-menu"
+          onClick={onOpenSidebar}
+          aria-label="Open navigation menu"
+        >
+          <Menu size={18} />
+        </button>
         <div className="topbar-brand-icon">E</div>
         <div className="topbar-brand-copy">
           <p className="topbar-breadcrumb">Workspace / {activeSectionLabel}</p>
@@ -75,7 +88,11 @@ export default function Topbar({
           onClick={() => onNavigateSection?.('settings')}
           aria-label="Open settings"
         >
-          {avatarLabel}
+          {profileImage ? (
+            <img src={profileImage} alt={user?.username || 'User'} />
+          ) : (
+            avatarLabel
+          )}
         </button>
         <button type="button" className="topbar-icon-button" onClick={logout} aria-label="Logout">
           <LogOut size={16} />

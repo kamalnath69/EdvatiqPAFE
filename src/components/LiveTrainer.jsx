@@ -196,6 +196,10 @@ export default function LiveTrainer({
     const raw = window.localStorage.getItem('live.aiGuidance.enabled');
     return raw === null ? true : raw === '1';
   });
+  const [liveVoiceEnabled, setLiveVoiceEnabled] = useState(() => {
+    const raw = window.localStorage.getItem('live.aiVoice.enabled');
+    return raw === null ? true : raw === '1';
+  });
   const [customNote, setCustomNote] = useState('');
   const [drillFocus, setDrillFocus] = useState('');
   const [intensityRpe, setIntensityRpe] = useState('');
@@ -361,6 +365,10 @@ export default function LiveTrainer({
   }, [liveGuidanceEnabled]);
 
   useEffect(() => {
+    window.localStorage.setItem('live.aiVoice.enabled', liveVoiceEnabled ? '1' : '0');
+  }, [liveVoiceEnabled]);
+
+  useEffect(() => {
     window.localStorage.setItem('live.overlay.xOffsetPct', String(overlayXOffsetPct));
   }, [overlayXOffsetPct]);
 
@@ -392,6 +400,8 @@ export default function LiveTrainer({
   }, [live.running]);
 
   const elapsedLabel = `${String(Math.floor(elapsedSec / 60)).padStart(2, '0')}:${String(elapsedSec % 60).padStart(2, '0')}`;
+  const liveCoachActive = live.running && liveGuidanceEnabled;
+  const liveCoachVoiceActive = live.running && liveGuidanceEnabled && liveVoiceEnabled;
 
   async function handleStart() {
     if (!sport.trim()) {
@@ -683,6 +693,13 @@ export default function LiveTrainer({
                 </button>
                 <button
                   type="button"
+                  className="live-fs-section-toggle live-fs-toggle-guidance"
+                  onClick={() => setLiveVoiceEnabled((value) => !value)}
+                >
+                  {liveVoiceEnabled ? 'Voice -' : 'Voice +'}
+                </button>
+                <button
+                  type="button"
                   className="live-fs-section-toggle live-fs-toggle-camera"
                   onClick={() => setFsCameraOpen((v) => !v)}
                 >
@@ -839,7 +856,8 @@ export default function LiveTrainer({
       <LiveCoachAssist
         liveRunning={live.running}
         fullscreen={fullscreen}
-        active={liveGuidanceEnabled}
+        active={liveCoachActive}
+        voiceActive={liveCoachVoiceActive}
         sport={analysis?.sport || sport}
         student={student.trim()}
         feedback={feedback}
@@ -891,6 +909,10 @@ export default function LiveTrainer({
         <label className="check-field live-toggle-row">
           <input type="checkbox" checked={liveGuidanceEnabled} onChange={(e) => setLiveGuidanceEnabled(e.target.checked)} />
           <span>Live AI Guidance {liveGuidanceEnabled ? 'ON' : 'OFF'}</span>
+        </label>
+        <label className="check-field live-toggle-row">
+          <input type="checkbox" checked={liveVoiceEnabled} onChange={(e) => setLiveVoiceEnabled(e.target.checked)} />
+          <span>Live Coach Voice {liveVoiceEnabled ? 'ON' : 'OFF'}</span>
         </label>
 
         <div className="calibration-grid">
