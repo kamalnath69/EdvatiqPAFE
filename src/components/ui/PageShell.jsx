@@ -1,32 +1,61 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import AiCoachChat from '../AiCoachChat';
 import { usePlanAccess } from '../../hooks/usePlanAccess';
-import { AuthContext } from '../../context/auth-context';
+import { getWalletSummary, listNotifications, searchWorkspace } from '../../services/workspaceApi';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { toggleSidebarCollapsed } from '../../store/uiSlice';
+import { useToast } from '../../hooks/useToast';
+import { startWalletRecharge } from '../../services/walletCheckout';
+import { useAuthUser } from '../../hooks/useAuthUser';
 
-export default function PageShell({ title, subtitle, sections, heroStats = [], heroNote = '', children }) {
+export default function PageShell({ title, subtitle, sections, children }) {
   const [activeSection, setActiveSection] = useState(sections?.[0]?.key || 'overview');
-  const [collapsed, setCollapsed] = useState(() => window.localStorage.getItem('shell.sidebar.collapsed') === '1');
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [walletSummary, setWalletSummary] = useState(null);
+  const [walletCharging, setWalletCharging] = useState(false);
   const planAccess = usePlanAccess();
-  const { user } = useContext(AuthContext);
+  const dispatch = useAppDispatch();
+  const collapsed = useAppSelector((state) => state.ui.sidebarCollapsed);
+  const { pushToast } = useToast();
+  const { user } = useAuthUser();
+
+  useEffect(() => {
+    let active = true;
+    const loadWallet = () =>
+      getWalletSummary()
+        .then((data) => {
+          if (active) setWalletSummary(data);
+        })
+        .catch(() => {
+          if (active) setWalletSummary(null);
+        });
+    loadWallet();
+    const id = window.setInterval(loadWallet, 30000);
+    return () => {
+      active = false;
+      window.clearInterval(id);
+    };
+  }, []);
 
   const activeSectionLabel = useMemo(() => {
     const item = (sections || []).find((s) => s.key === activeSection);
     return item?.label || 'Overview';
   }, [sections, activeSection]);
+  const sidebarSections = useMemo(
+    () => (sections || []).filter((item) => !item.sidebarHidden),
+    [sections]
+  );
 
   const filteredSections = useMemo(() => {
     const q = commandQuery.trim().toLowerCase();
     if (!q) return sections || [];
     return (sections || []).filter((item) => item.label.toLowerCase().includes(q));
   }, [sections, commandQuery]);
-
-  useEffect(() => {
-    window.localStorage.setItem('shell.sidebar.collapsed', collapsed ? '1' : '0');
-  }, [collapsed]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -43,23 +72,57 @@ export default function PageShell({ title, subtitle, sections, heroStats = [], h
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const workspaceSummary = useMemo(
-    () => [
-      heroStats[0] || { label: 'Workspace Sections', value: sections?.length || 0 },
-      heroStats[1] || { label: 'Active View', value: activeSectionLabel },
-      heroStats[2] || { label: 'Role', value: user?.role?.replaceAll('_', ' ') || 'workspace' },
-    ],
-    [heroStats, sections, activeSectionLabel, user]
-  );
+  useEffect(() => {
+    listNotifications(true)
+      .then((items) => setUnreadCount(items.length))
+      .catch(() => setUnreadCount(0));
+  }, [activeSection]);
+
+  useEffect(() => {
+    const q = commandQuery.trim();
+    if (q.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const id = window.setTimeout(() => {
+      searchWorkspace(q)
+        .then((items) => setSearchResults(items))
+        .catch(() => setSearchResults([]));
+    }, 180);
+    return () => window.clearTimeout(id);
+  }, [commandQuery]);
+
+  async function handleQuickTopUp(credits) {
+    setWalletCharging(true);
+    try {
+      const summary = await startWalletRecharge({
+        credits,
+        note: `Added ${credits} credits from sidebar wallet.`,
+        prefill: {
+          name: user?.full_name || user?.username,
+          email: user?.email,
+        },
+      });
+      setWalletSummary(summary);
+      pushToast({ type: 'success', message: `${credits} credits added to wallet.` });
+    } catch (error) {
+      pushToast({ type: 'error', message: error?.message || 'Unable to add wallet credits.' });
+    } finally {
+      setWalletCharging(false);
+    }
+  }
 
   return (
     <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
       <Sidebar
-        sections={sections}
+        sections={sidebarSections}
         activeSection={activeSection}
         onChange={setActiveSection}
         collapsed={collapsed}
-        onToggleCollapse={() => setCollapsed((prev) => !prev)}
+        onToggleCollapse={() => dispatch(toggleSidebarCollapsed())}
+        walletSummary={walletSummary}
+        walletCharging={walletCharging}
+        onQuickTopUp={handleQuickTopUp}
       />
       <main className="shell-main">
         <Topbar
@@ -67,27 +130,9 @@ export default function PageShell({ title, subtitle, sections, heroStats = [], h
           subtitle={subtitle}
           activeSectionLabel={activeSectionLabel}
           onOpenCommandPalette={() => setCommandOpen(true)}
+          onNavigateSection={setActiveSection}
+          unreadCount={unreadCount}
         />
-        <section className="workspace-hero entrance-rise">
-          <div className="workspace-hero-copy">
-            <span className="workspace-hero-kicker">Platform Workspace</span>
-            <h2>{title}</h2>
-            <p>{subtitle}</p>
-            <div className="workspace-hero-tags">
-              <span className="workspace-hero-tag">Section: {activeSectionLabel}</span>
-              <span className="workspace-hero-tag">Quick Search Ready</span>
-              {heroNote ? <span className="workspace-hero-tag">{heroNote}</span> : null}
-            </div>
-          </div>
-          <div className="workspace-hero-stats">
-            {workspaceSummary.map((item) => (
-              <article key={item.label} className="workspace-hero-stat">
-                <p>{item.label}</p>
-                <strong>{item.value}</strong>
-              </article>
-            ))}
-          </div>
-        </section>
         <section key={activeSection} className="page-content entrance-rise">
           {children(activeSection)}
         </section>
@@ -132,11 +177,22 @@ export default function PageShell({ title, subtitle, sections, heroStats = [], h
               ) : (
                 <p className="help-text">No sections match your search.</p>
               )}
+              {searchResults.length ? (
+                <div className="command-result-group">
+                  <p className="command-result-label">Workspace Results</p>
+                  {searchResults.map((item) => (
+                    <div key={`${item.type}-${item.id}`} className="command-result-row">
+                      <span>{item.title}</span>
+                      <small>{item.subtitle || item.type}</small>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
       ) : null}
-      <AiCoachChat enabled={planAccess.ai_chat} />
+      <AiCoachChat enabled={planAccess.ai_chat} onWalletChange={setWalletSummary} />
     </div>
   );
 }

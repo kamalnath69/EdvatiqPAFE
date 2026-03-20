@@ -1,14 +1,13 @@
-import { useContext } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
-import { AuthContext } from '../context/auth-context';
 import { loginRequest, requestEmailVerification } from '../services/authApi';
 import FormField from './ui/FormField';
 import { getErrorMessage } from '../services/httpError';
 import { useToast } from '../hooks/useToast';
+import { useAuthUser } from '../hooks/useAuthUser';
 
 export default function Login() {
-  const { login } = useContext(AuthContext);
+  const { login } = useAuthUser();
   const navigate = useNavigate();
   const { pushToast } = useToast();
   const {
@@ -25,7 +24,7 @@ export default function Login() {
   const onSubmit = async (values) => {
     try {
       const resp = await loginRequest(values.username, values.password);
-      login(resp.access_token);
+      await login(resp.access_token);
       navigate('/dashboard');
     } catch (err) {
       const detail = err?.response?.data?.detail || '';

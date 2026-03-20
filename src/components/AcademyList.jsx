@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import api from '../api';
-import { useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import { useAuthUser } from '../hooks/useAuthUser';
 
 export default function AcademyList() {
   const [academies, setAcademies] = useState([]);
-  const { token } = useContext(AuthContext);
+  const { token } = useAuthUser();
 
   useEffect(() => {
     if (!token) return;

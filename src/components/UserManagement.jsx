@@ -1,10 +1,10 @@
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../api';
-import { AuthContext } from '../context/AuthContext';
+import { useAuthUser } from '../hooks/useAuthUser';
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
-  const { token } = useContext(AuthContext);
+  const { token } = useAuthUser();
 
   useEffect(() => {
     if (!token) return;

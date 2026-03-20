@@ -1,7 +1,7 @@
-import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
-// eslint-disable-next-line no-unused-vars
-import { AnimatePresence, m } from 'framer-motion';
+import { Link, useLocation } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { m } from 'framer-motion';
 import {
   ArrowRight,
   BarChart3,
@@ -15,6 +15,9 @@ import {
   Zap,
 } from 'lucide-react';
 import { listPlans } from '../services/billingApi';
+import { createDemoLead } from '../services/leadsApi';
+import { useToast } from '../hooks/useToast';
+import { getErrorMessage } from '../services/httpError';
 
 const NAV_SECTIONS = [
   { id: 'hero', label: 'Home' },
@@ -25,26 +28,11 @@ const NAV_SECTIONS = [
 ];
 
 const LOGO_STRIP = [
-  {
-    name: 'Google',
-    src: 'https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg',
-  },
-  {
-    name: 'Nike',
-    src: 'https://upload.wikimedia.org/wikipedia/commons/a/a6/Logo_NIKE.svg',
-  },
-  {
-    name: 'Adidas',
-    src: 'https://upload.wikimedia.org/wikipedia/commons/2/20/Adidas_Logo.svg',
-  },
-  {
-    name: 'Under Armour',
-    src: 'https://upload.wikimedia.org/wikipedia/commons/7/7e/Under_armour_logo.svg',
-  },
-  {
-    name: 'Puma',
-    src: 'https://upload.wikimedia.org/wikipedia/commons/f/fd/Puma_Logo.svg',
-  },
+  { name: 'Google', src: 'https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg' },
+  { name: 'Nike', src: 'https://upload.wikimedia.org/wikipedia/commons/a/a6/Logo_NIKE.svg' },
+  { name: 'Adidas', src: 'https://upload.wikimedia.org/wikipedia/commons/2/20/Adidas_Logo.svg' },
+  { name: 'Under Armour', src: 'https://upload.wikimedia.org/wikipedia/commons/7/7e/Under_armour_logo.svg' },
+  { name: 'Puma', src: 'https://upload.wikimedia.org/wikipedia/commons/f/fd/Puma_Logo.svg' },
 ];
 
 const HERO_BADGES = [
@@ -88,44 +76,16 @@ const FEATURE_STRIPS = [
 ];
 
 const CAPABILITIES = [
-  {
-    icon: <Target size={18} />,
-    title: 'Precision targets',
-    desc: 'Set sport-specific targets and tolerances per athlete.',
-  },
-  {
-    icon: <BarChart3 size={18} />,
-    title: 'Performance dashboards',
-    desc: 'Track progress across sessions and find best reps fast.',
-  },
-  {
-    icon: <Shield size={18} />,
-    title: 'Secure collaboration',
-    desc: 'RBAC access keeps coaches, admins, and athletes in sync.',
-  },
-  {
-    icon: <Bot size={18} />,
-    title: 'AI coach guidance',
-    desc: 'Ask the AI coach for improvement plans and drill ideas.',
-  },
+  { icon: <Target size={18} />, title: 'Precision targets', desc: 'Set sport-specific targets and tolerances per athlete.' },
+  { icon: <BarChart3 size={18} />, title: 'Performance dashboards', desc: 'Track progress across sessions and find best reps fast.' },
+  { icon: <Shield size={18} />, title: 'Secure collaboration', desc: 'RBAC access keeps coaches, admins, and athletes in sync.' },
+  { icon: <Bot size={18} />, title: 'AI coach guidance', desc: 'Ask the AI coach for improvement plans and drill ideas.' },
 ];
 
 const PLATFORM_STEPS = [
-  {
-    icon: <Zap size={18} />,
-    title: 'Capture',
-    desc: 'Launch live coach and start tracking immediately.',
-  },
-  {
-    icon: <TrendingUp size={18} />,
-    title: 'Analyze',
-    desc: 'Review session scores, best reps, and timelines.',
-  },
-  {
-    icon: <Sparkles size={18} />,
-    title: 'Improve',
-    desc: 'Use AI coaching to drive the next training plan.',
-  },
+  { icon: <Zap size={18} />, title: 'Capture', desc: 'Launch live coach and start tracking immediately.' },
+  { icon: <TrendingUp size={18} />, title: 'Analyze', desc: 'Review session scores, best reps, and timelines.' },
+  { icon: <Sparkles size={18} />, title: 'Improve', desc: 'Use AI coaching to drive the next training plan.' },
 ];
 
 const TESTIMONIALS = [
@@ -152,50 +112,19 @@ const TESTIMONIALS = [
   },
 ];
 
+const FAQ_CATEGORIES = ['Getting Started', 'Training & Coaching', 'Analytics & Reports', 'Pricing & Plans', 'Security'];
 const FAQS = [
-  {
-    category: 'Getting Started',
-    q: 'Do athletes need wearables or sensors?',
-    a: 'No. Edvatiq runs on camera input with posture intelligence and live scoring.',
-  },
-  {
-    category: 'Pricing & Plans',
-    q: 'Can I use Edvatiq for personal training only?',
-    a: 'Yes. Choose a personal plan for solo training or upgrade to organization plans for teams.',
-  },
-  {
-    category: 'Training & Coaching',
-    q: 'How does the AI coach help?',
-    a: 'Ask questions about form, corrections, and drills. The AI coach returns immediate guidance.',
-  },
-  {
-    category: 'Security',
-    q: 'Is role-based access included?',
-    a: 'Organization plans include academy admin, staff, and student roles out of the box.',
-  },
-  {
-    category: 'Analytics & Reports',
-    q: 'What can coaches review after a session?',
-    a: 'Coaches can review unified scores, best-rep highlights, trend charts, and session-level progress over time.',
-  },
+  { category: 'Getting Started', q: 'Do athletes need wearables or sensors?', a: 'No. Edvatiq runs on camera input with posture intelligence and live scoring.' },
+  { category: 'Pricing & Plans', q: 'Can I use Edvatiq for personal training only?', a: 'Yes. Choose a personal plan for solo training or upgrade to organization plans for teams.' },
+  { category: 'Training & Coaching', q: 'How does the AI coach help?', a: 'Ask questions about form, corrections, and drills. The AI coach returns immediate guidance.' },
+  { category: 'Security', q: 'Is role-based access included?', a: 'Organization plans include academy admin, staff, and student roles out of the box.' },
+  { category: 'Analytics & Reports', q: 'What can coaches review after a session?', a: 'Coaches can review unified scores, best-rep highlights, trend charts, and session-level progress over time.' },
 ];
 
 const TRUST_PILLARS = [
-  {
-    title: 'Role-aware access',
-    desc: 'Separate academy admin, staff, and athlete experiences with permissioned workflows built in.',
-    stat: 'RBAC native',
-  },
-  {
-    title: 'Camera-first deployment',
-    desc: 'No wearables, no complex hardware stack, and no extra setup burden for the athlete.',
-    stat: 'Setup in minutes',
-  },
-  {
-    title: 'Coach-readable reporting',
-    desc: 'Session scoring, best reps, and review notes are structured so coaches can act immediately.',
-    stat: 'Decision-ready',
-  },
+  { title: 'Role-aware access', desc: 'Separate academy admin, staff, and athlete experiences with permissioned workflows built in.', stat: 'RBAC native' },
+  { title: 'Camera-first deployment', desc: 'No wearables, no complex hardware stack, and no extra setup burden for the athlete.', stat: 'Setup in minutes' },
+  { title: 'Coach-readable reporting', desc: 'Session scoring, best reps, and review notes are structured so coaches can act immediately.', stat: 'Decision-ready' },
 ];
 
 const SECURITY_SIGNALS = [
@@ -206,21 +135,9 @@ const SECURITY_SIGNALS = [
 ];
 
 const CASE_STUDIES = [
-  {
-    title: 'Solo athlete progression',
-    result: 'Sharper self-correction between coached sessions',
-    detail: 'Personal plans combine live posture guidance, session logging, and AI coaching so athletes can improve between in-person reviews.',
-  },
-  {
-    title: 'Academy operations',
-    result: 'Less switching between coaching and admin tools',
-    detail: 'Staff and academy admins share one workspace for student management, assigned sports, session history, and rule profiles.',
-  },
-  {
-    title: 'Review workflow clarity',
-    result: 'Faster post-session analysis',
-    detail: 'Session records store notes, angles, rep counts, and highlights in a format that is easy to review and explain to athletes.',
-  },
+  { title: 'Solo athlete progression', result: 'Sharper self-correction between coached sessions', detail: 'Personal plans combine live posture guidance, session logging, and AI coaching so athletes can improve between in-person reviews.' },
+  { title: 'Academy operations', result: 'Less switching between coaching and admin tools', detail: 'Staff and academy admins share one workspace for student management, assigned sports, session history, and rule profiles.' },
+  { title: 'Review workflow clarity', result: 'Faster post-session analysis', detail: 'Session records store notes, angles, rep counts, and highlights in a format that is easy to review and explain to athletes.' },
 ];
 
 const IMPLEMENTATION_STEPS = [
@@ -229,100 +146,18 @@ const IMPLEMENTATION_STEPS = [
   'Start with live coaching, then build history and reporting over time.',
 ];
 
-const PLAN_COMPARISON = [
-  {
-    feature: 'Live posture tracking',
-    personal_basic: true,
-    personal_pro: true,
-    org_basic: true,
-    org_pro: true,
-  },
-  {
-    feature: 'Session scoring and history',
-    personal_basic: true,
-    personal_pro: true,
-    org_basic: true,
-    org_pro: true,
-  },
-  {
-    feature: 'AI coach chat',
-    personal_basic: false,
-    personal_pro: true,
-    org_basic: false,
-    org_pro: true,
-  },
-  {
-    feature: 'Athlete and staff management',
-    personal_basic: false,
-    personal_pro: false,
-    org_basic: true,
-    org_pro: true,
-  },
-  {
-    feature: 'Advanced analytics and reporting',
-    personal_basic: false,
-    personal_pro: true,
-    org_basic: false,
-    org_pro: true,
-  },
-];
-
-const FAQ_CATEGORIES = [
-  'Getting Started',
-  'Training & Coaching',
-  'Analytics & Reports',
-  'Pricing & Plans',
-  'Security',
-];
-
 const DEFAULT_PLANS = [
-  {
-    code: 'personal_basic',
-    name: 'Personal Basic',
-    amount_inr: 499,
-    description: 'For solo athletes getting started.',
-    features: ['Live coach sessions', 'Session history + score', 'Core training analytics'],
-  },
-  {
-    code: 'personal_pro',
-    name: 'Personal Pro',
-    amount_inr: 999,
-    description: 'Advanced tools for serious training.',
-    features: ['All Basic features', 'AI coach chat', 'AI session intelligence'],
-  },
-  {
-    code: 'org_basic',
-    name: 'Organization Basic',
-    amount_inr: 4999,
-    description: 'Starter plan for academies and teams.',
-    features: ['Academy admin workspace', 'Staff + student management', 'Shared dashboards'],
-  },
-  {
-    code: 'org_pro',
-    name: 'Organization Pro',
-    amount_inr: 9999,
-    description: 'Enterprise-grade scale and reporting.',
-    features: ['All Org Basic features', 'AI coach chat', 'AI analytics suite'],
-  },
+  { code: 'personal_basic', name: 'Personal Basic', amount_inr: 499, description: 'For solo athletes getting started.', features: ['Live coach sessions', 'Session history + score', 'Core training analytics'] },
+  { code: 'personal_pro', name: 'Personal Pro', amount_inr: 999, description: 'Advanced tools for serious training.', features: ['All Basic features', 'AI coach chat', 'AI session intelligence'] },
+  { code: 'org_basic', name: 'Organization Basic', amount_inr: 4999, description: 'Starter plan for academies and teams.', features: ['Academy admin workspace', 'Staff + student management', 'Shared dashboards'] },
+  { code: 'org_pro', name: 'Organization Pro', amount_inr: 9999, description: 'Enterprise-grade scale and reporting.', features: ['All Org Basic features', 'AI coach chat', 'AI analytics suite'] },
 ];
 
-const FALLBACK_IMAGE =
-  'https://source.unsplash.com/featured/1600x1200/?archery,olympics';
+const FALLBACK_IMAGE = 'https://source.unsplash.com/featured/1600x1200/?archery,olympics';
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 28 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } },
-};
-
-const fadeIn = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.7, ease: 'easeOut' } },
-};
-
-const stagger = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.12 } },
-};
+const fadeUp = { hidden: { opacity: 0, y: 28 }, visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } } };
+const fadeIn = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { duration: 0.7, ease: 'easeOut' } } };
+const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.12 } } };
 
 const HERO_RELEASE_PROGRESS = 0.56;
 const HERO_PRE_RELEASE_HOLD = 0.48;
@@ -355,8 +190,11 @@ function HeroArrowSvg({ className = '', gradientId }) {
   );
 }
 
-const randomBetween = (min, max) => min + Math.random() * (max - min);
+function formatPrice(amount) {
+  return Number.isFinite(amount) ? `INR ${amount.toLocaleString('en-IN')} / month` : '--';
+}
 
+const randomBetween = (min, max) => min + Math.random() * (max - min);
 const clampValue = (value, min, max) => Math.min(Math.max(value, min), max);
 
 const buildHeroFlightPlan = (width, height, startPoint, impactPoint, arrowSize, duration) => {
@@ -377,16 +215,8 @@ const buildHeroFlightPlan = (width, height, startPoint, impactPoint, arrowSize, 
     const spiralFactor = 1 - progress * 0.34;
     const wobble = Math.sin(progress * Math.PI * 4) * 12;
     return {
-      x: clampValue(
-        orbitCenter.x + Math.cos(angle) * (radiusX * spiralFactor + wobble),
-        96,
-        width - 96
-      ),
-      y: clampValue(
-        orbitCenter.y + Math.sin(angle) * (radiusY * spiralFactor + wobble * 0.85),
-        96,
-        height - 96
-      ),
+      x: clampValue(orbitCenter.x + Math.cos(angle) * (radiusX * spiralFactor + wobble), 96, width - 96),
+      y: clampValue(orbitCenter.y + Math.sin(angle) * (radiusY * spiralFactor + wobble * 0.85), 96, height - 96),
     };
   });
   const approachPoint = {
@@ -410,7 +240,6 @@ const buildHeroFlightPlan = (width, height, startPoint, impactPoint, arrowSize, 
     x: impactPoint.x - Math.cos(finalAngle) * (arrowSize.tipOffset ?? HERO_ARROW_TIP_OFFSET),
     y: impactPoint.y - Math.sin(finalAngle) * (arrowSize.tipOffset ?? HERO_ARROW_TIP_OFFSET),
   };
-
   const launchHoldA = { ...startPoint };
   const launchHoldB = { ...startPoint };
   const orbitStart = orbitPoints[0];
@@ -423,7 +252,6 @@ const buildHeroFlightPlan = (width, height, startPoint, impactPoint, arrowSize, 
     x: point.x - arrowSize.width / 2,
     y: point.y - arrowSize.height / 2,
   }));
-
   return {
     duration,
     impactPoint,
@@ -445,41 +273,58 @@ const buildHeroFlightPlan = (width, height, startPoint, impactPoint, arrowSize, 
 };
 
 export default function Landing() {
+  const location = useLocation();
+  const { pushToast } = useToast();
   const [activeSection, setActiveSection] = useState('hero');
   const [plans, setPlans] = useState(DEFAULT_PLANS);
   const [openFaq, setOpenFaq] = useState(null);
   const [activeCategory, setActiveCategory] = useState(FAQ_CATEGORIES[0]);
   const [heroFlight, setHeroFlight] = useState(null);
   const [flightCycle, setFlightCycle] = useState(0);
+  const [demoSubmitted, setDemoSubmitted] = useState(false);
   const sectionRefs = useRef({});
-  const observerRef = useRef(null);
   const targetRef = useRef(null);
   const archerRef = useRef(null);
+  const {
+    register: registerDemo,
+    handleSubmit: handleDemoSubmit,
+    formState: { isSubmitting: isDemoSubmitting },
+  } = useForm({
+    defaultValues: {
+      name: '',
+      email: '',
+      organization: '',
+      role: '',
+      team_size: '',
+      timeline: '',
+      goals: '',
+      preferred_contact: '',
+    },
+  });
 
-  const registerSection = (id) => (el) => {
-    if (el) sectionRefs.current[id] = el;
+  useEffect(() => {
+    listPlans().then((data) => {
+      if (Array.isArray(data) && data.length) setPlans(data);
+    }).catch(() => {});
+  }, []);
+
+  const registerSection = (id) => (element) => {
+    if (element) sectionRefs.current[id] = element;
   };
 
   const handleNavClick = (id) => {
-    const el = sectionRefs.current[id];
-    if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const node = sectionRefs.current[id];
+    if (!node) return;
+    node.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setActiveSection(id);
   };
 
   const navItems = useMemo(
-    () =>
-      NAV_SECTIONS.map((item) => ({
-        ...item,
-        active: activeSection === item.id,
-      })),
+    () => NAV_SECTIONS.map((item) => ({ ...item, active: activeSection === item.id })),
     [activeSection]
   );
 
-  const filteredFaqs = useMemo(
-    () => FAQS.filter((item) => item.category === activeCategory),
-    [activeCategory]
-  );
+  const filteredFaqs = useMemo(() => FAQS.filter((item) => item.category === activeCategory), [activeCategory]);
 
   const handleImageError = (event) => {
     if (event.currentTarget.dataset.fallback === '1') return;
@@ -487,37 +332,43 @@ export default function Landing() {
     event.currentTarget.src = FALLBACK_IMAGE;
   };
 
-  useEffect(() => {
-    listPlans()
-      .then((data) => {
-        if (Array.isArray(data) && data.length) setPlans(data);
-      })
-      .catch(() => {});
-  }, []);
+  const handleDemoRequest = async (values) => {
+    try {
+      await createDemoLead(values);
+      setDemoSubmitted(true);
+      pushToast({ type: 'success', message: 'Demo request submitted successfully.' });
+      handleNavClick('book-demo');
+    } catch (err) {
+      pushToast({ type: 'error', message: getErrorMessage(err, 'Unable to submit demo request.') });
+    }
+  };
 
-  const formatPrice = (amount) => (Number.isFinite(amount) ? `INR ${amount.toLocaleString('en-IN')} / month` : '--');
-
   useEffect(() => {
-    if (observerRef.current) observerRef.current.disconnect();
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) setActiveSection(entry.target.id);
         });
       },
-      { rootMargin: '-20% 0px -60% 0px', threshold: 0.1 }
+      { rootMargin: '-20% 0px -60% 0px', threshold: 0.15 }
     );
-    observerRef.current = observer;
-    NAV_SECTIONS.forEach((section) => {
-      const el = sectionRefs.current[section.id];
-      if (el) observer.observe(el);
-    });
+    Object.values(sectionRefs.current).forEach((section) => section && observer.observe(section));
     return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
-    let timeoutId;
+    if (!location.hash) return;
+    const id = location.hash.replace('#', '');
+    const node = sectionRefs.current[id];
+    if (!node) return;
+    window.requestAnimationFrame(() => {
+      node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setActiveSection(id);
+    });
+  }, [location.hash]);
 
+  useEffect(() => {
+    let timeoutId;
     const runFlightLoop = () => {
       const heroEl = sectionRefs.current.hero;
       const archerEl = archerRef.current;
@@ -526,7 +377,6 @@ export default function Landing() {
         timeoutId = window.setTimeout(runFlightLoop, HERO_FLIGHT_DURATION_MIN * 1000);
         return;
       }
-
       const heroRect = heroEl.getBoundingClientRect();
       const archerRect = archerEl.getBoundingClientRect();
       const targetRect = targetEl.getBoundingClientRect();
@@ -542,7 +392,6 @@ export default function Landing() {
         x: targetRect.left - heroRect.left + targetRect.width / 2,
         y: targetRect.top - heroRect.top + targetRect.height / 2,
       };
-
       setHeroFlight(
         buildHeroFlightPlan(
           heroRect.width,
@@ -556,12 +405,10 @@ export default function Landing() {
       setFlightCycle((prev) => prev + 1);
       timeoutId = window.setTimeout(runFlightLoop, duration * 1000);
     };
-
     const handleResize = () => {
       window.clearTimeout(timeoutId);
       runFlightLoop();
     };
-
     runFlightLoop();
     window.addEventListener('resize', handleResize);
     return () => {
@@ -595,10 +442,10 @@ export default function Landing() {
           </nav>
           <div className="landing-actions">
             <Link className="ghost-button" to="/login">Login</Link>
-            <Link className="ghost-button" to="/support">Support</Link>
-            <Link className="primary-button demo-button" to="/book-demo">
+            <button type="button" className="ghost-button" onClick={() => handleNavClick('book-demo')}>Support</button>
+            <button type="button" className="primary-button demo-button" onClick={() => handleNavClick('book-demo')}>
               Book a Demo <ArrowRight size={18} />
-            </Link>
+            </button>
           </div>
         </div>
       </header>
@@ -607,7 +454,7 @@ export default function Landing() {
         id="hero"
         ref={registerSection('hero')}
         className="hero-section landing-section"
-        initial="hidden"
+        initial={false}
         whileInView="visible"
         viewport={{ once: true, amount: 0.4 }}
         variants={stagger}
@@ -674,10 +521,7 @@ export default function Landing() {
               <m.div
                 key={`hero-flight-arrow-${flightCycle}`}
                 className="hero-flight-arrow-shell"
-                style={{
-                  width: heroFlight.arrowSize.width,
-                  height: heroFlight.arrowSize.height,
-                }}
+                style={{ width: heroFlight.arrowSize.width, height: heroFlight.arrowSize.height }}
                 initial={{
                   x: heroFlight.points[0].x,
                   y: heroFlight.points[0].y,
@@ -690,11 +534,7 @@ export default function Landing() {
                   rotate: heroFlight.rotations,
                   opacity: heroFlight.opacity,
                 }}
-                transition={{
-                  duration: heroFlight.duration,
-                  times: heroFlight.times,
-                  ease: 'linear',
-                }}
+                transition={{ duration: heroFlight.duration, times: heroFlight.times, ease: 'linear' }}
               >
                 <span className="hero-flight-trail" />
                 <span className="hero-flight-flame" />
@@ -807,10 +647,10 @@ export default function Landing() {
             knows exactly what to fix next.
           </m.p>
           <m.div className="hero-cta" variants={fadeUp}>
-            <Link className="primary-button demo-button" to="/book-demo">
+            <button type="button" className="primary-button demo-button" onClick={() => handleNavClick('book-demo')}>
               Book a Demo <ArrowRight size={18} />
-            </Link>
-            <Link className="ghost-button" to="/pricing">View Plans</Link>
+            </button>
+            <button type="button" className="ghost-button" onClick={() => handleNavClick('plans')}>View Plans</button>
           </m.div>
           <m.div className="hero-proof" variants={fadeUp}>
             {HERO_BADGES.slice(0, 3).map((badge) => (
@@ -838,6 +678,16 @@ export default function Landing() {
                 <strong>Draw Elbow</strong>
                 <span>Raise 4 degrees</span>
               </article>
+              <article className="hero-console-card accent-soft">
+                <p>Best Rep</p>
+                <strong>88 / 100</strong>
+                <span>Balanced release</span>
+              </article>
+              <article className="hero-console-card">
+                <p>Latency</p>
+                <strong>34 ms</strong>
+                <span>Live correction ready</span>
+              </article>
             </div>
             <div className="hero-console-chart">
               <div className="hero-console-chart-head">
@@ -845,20 +695,8 @@ export default function Landing() {
                 <strong>+18%</strong>
               </div>
               <svg viewBox="0 0 320 132" preserveAspectRatio="none" aria-hidden="true">
-                <path
-                  d="M0 98C24 100 30 92 52 88C76 82 92 72 116 76C136 78 154 62 174 56C196 48 218 60 240 46C264 32 286 18 320 22"
-                  fill="none"
-                  stroke="rgba(255,255,255,0.18)"
-                  strokeWidth="18"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M0 98C24 100 30 92 52 88C76 82 92 72 116 76C136 78 154 62 174 56C196 48 218 60 240 46C264 32 286 18 320 22"
-                  fill="none"
-                  stroke="#7dd3fc"
-                  strokeWidth="5"
-                  strokeLinecap="round"
-                />
+                <path d="M0 98C24 100 30 92 52 88C76 82 92 72 116 76C136 78 154 62 174 56C196 48 218 60 240 46C264 32 286 18 320 22" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="18" strokeLinecap="round" />
+                <path d="M0 98C24 100 30 92 52 88C76 82 92 72 116 76C136 78 154 62 174 56C196 48 218 60 240 46C264 32 286 18 320 22" fill="none" stroke="#7dd3fc" strokeWidth="5" strokeLinecap="round" />
                 <circle cx="240" cy="46" r="8" fill="#ff7f50" />
                 <circle cx="240" cy="46" r="16" fill="rgba(255, 127, 80, 0.18)" />
                 <circle cx="320" cy="22" r="8" fill="#ffd166" />
@@ -883,22 +721,12 @@ export default function Landing() {
         </m.div>
       </m.section>
 
-      <m.section
-        className="logo-strip landing-section"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.4 }}
-        variants={fadeIn}
-      >
+      <m.section className="logo-strip landing-section" initial={false} whileInView="visible" viewport={{ once: true, amount: 0.4 }} variants={fadeIn}>
         <p className="brand-kicker">Trusted by performance teams</p>
         <div className="marquee-shell logo-marquee" aria-label="Trusted by performance teams">
           <div className="marquee-track logo-track">
             {[...LOGO_STRIP, ...LOGO_STRIP].map((logo, index) => (
-              <div
-                key={`${logo.name}-${index}`}
-                className="logo-marquee-item"
-                aria-hidden={index >= LOGO_STRIP.length}
-              >
+              <div key={`${logo.name}-${index}`} className="logo-marquee-item" aria-hidden={index >= LOGO_STRIP.length}>
                 <img src={logo.src} alt={index < LOGO_STRIP.length ? `${logo.name} logo` : ''} loading="lazy" />
               </div>
             ))}
@@ -906,15 +734,7 @@ export default function Landing() {
         </div>
       </m.section>
 
-      <m.section
-        id="stats"
-        ref={registerSection('stats')}
-        className="landing-section section-soft"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.3 }}
-        variants={stagger}
-      >
+      <m.section id="stats" ref={registerSection('stats')} className="landing-section section-soft" initial={false} whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={stagger}>
         <m.div className="section-head" variants={fadeUp}>
           <span className="section-kicker">Performance impact</span>
           <h3>Performance gains you can prove</h3>
@@ -931,24 +751,20 @@ export default function Landing() {
         </m.div>
       </m.section>
 
-      <m.section
-        id="features"
-        ref={registerSection('features')}
-        className="landing-section"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.25 }}
-        variants={stagger}
-      >
+      <m.section id="features" ref={registerSection('features')} className="landing-section" initial={false} whileInView="visible" viewport={{ once: true, amount: 0.25 }} variants={stagger}>
         <m.div className="section-head" variants={fadeUp}>
           <span className="section-kicker">Product experience</span>
           <h3>Everything you need to coach better</h3>
           <p>Live intelligence, analytics, and operational tools in one system.</p>
         </m.div>
-        <m.div className="split-stack" variants={stagger}>
-          {FEATURE_STRIPS.map((item, index) => (
-            <m.div key={item.title} className={`split-section ${index % 2 === 1 ? 'reverse' : ''}`} variants={fadeUp}>
-              <div className="split-content split-panel">
+        <div className="feature-showcase">
+          <m.div className="feature-showcase-list" variants={stagger}>
+            {FEATURE_STRIPS.map((item, index) => (
+              <m.article
+                key={item.title}
+                className="feature-story-card active"
+                variants={fadeUp}
+              >
                 <div className="split-header">
                   <span className="split-index">0{index + 1}</span>
                   <span className="split-tag">{item.tag}</span>
@@ -964,54 +780,16 @@ export default function Landing() {
                   ))}
                 </ul>
                 <div className="split-actions">
-                  <Link className="ghost-button" to="/book-demo">See it in action</Link>
+                  <button type="button" className="ghost-button" onClick={() => handleNavClick('book-demo')}>See it in action</button>
                   <span className="split-note">Built to support live sessions, review, and planning.</span>
                 </div>
-              </div>
-              <div className="split-media">
-                <div className="split-media-overlay">
-                  <span>{item.tag}</span>
-                  <strong>{item.bullets[0]}</strong>
-                </div>
-                <div className={`feature-visual feature-visual-${index + 1}`} aria-hidden="true">
-                  <div className="feature-visual-window">
-                    <div className="feature-visual-topbar">
-                      <span />
-                      <span />
-                      <span />
-                    </div>
-                    <div className="feature-visual-body">
-                      <div className="feature-visual-chart">
-                        <span className="bar bar-1" />
-                        <span className="bar bar-2" />
-                        <span className="bar bar-3" />
-                        <span className="bar bar-4" />
-                      </div>
-                      <div className="feature-visual-stack">
-                        {item.metrics.map((metric) => (
-                          <div key={metric} className="feature-visual-pill">{metric}</div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="feature-visual-footer">
-                      <div className="feature-visual-line long" />
-                      <div className="feature-visual-line short" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </m.div>
-          ))}
-        </m.div>
+              </m.article>
+            ))}
+          </m.div>
+        </div>
       </m.section>
 
-      <m.section
-        className="landing-section section-soft"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.25 }}
-        variants={stagger}
-      >
+      <m.section className="landing-section section-soft" initial={false} whileInView="visible" viewport={{ once: true, amount: 0.25 }} variants={stagger}>
         <m.div className="section-head" variants={fadeUp}>
           <span className="section-kicker">Trust and rollout</span>
           <h3>Built to feel credible before you even book a call</h3>
@@ -1039,28 +817,18 @@ export default function Landing() {
               ))}
             </ul>
             <div className="trust-mini-grid">
-              <article>
-                <strong>Fast onboarding</strong>
-                <p>Start with a single athlete or activate a full academy workspace.</p>
-              </article>
-              <article>
-                <strong>Clear support path</strong>
-                <p>Demo booking, support routing, and legal pages are already in place.</p>
-              </article>
+              {CASE_STUDIES.slice(0, 2).map((item) => (
+                <article key={item.title}>
+                  <strong>{item.title}</strong>
+                  <p>{item.detail}</p>
+                </article>
+              ))}
             </div>
           </m.div>
         </div>
       </m.section>
 
-      <m.section
-        id="platform"
-        ref={registerSection('platform')}
-        className="landing-section"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.25 }}
-        variants={stagger}
-      >
+      <m.section id="platform" ref={registerSection('platform')} className="landing-section" initial={false} whileInView="visible" viewport={{ once: true, amount: 0.25 }} variants={stagger}>
         <m.div className="section-head" variants={fadeUp}>
           <span className="section-kicker">Operations layer</span>
           <h3>Built for performance operations</h3>
@@ -1098,15 +866,7 @@ export default function Landing() {
         </div>
       </m.section>
 
-      <m.section
-        id="testimonials"
-        ref={registerSection('testimonials')}
-        className="landing-section section-soft"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.25 }}
-        variants={stagger}
-      >
+      <m.section id="testimonials" ref={registerSection('testimonials')} className="landing-section section-soft" initial={false} whileInView="visible" viewport={{ once: true, amount: 0.25 }} variants={stagger}>
         <m.div className="section-head" variants={fadeUp}>
           <span className="section-kicker">Social proof</span>
           <h3>Teams love the Edvatiq workflow</h3>
@@ -1115,14 +875,15 @@ export default function Landing() {
         <div className="marquee-shell testimonial-marquee" aria-label="Customer testimonials">
           <div className="marquee-track testimonial-track">
             {[...TESTIMONIALS, ...TESTIMONIALS].map((item, index) => (
-              <div
-                key={`${item.name}-${index}`}
-                className="testimonial-card testimonial-marquee-item"
-                aria-hidden={index >= TESTIMONIALS.length}
-              >
+              <div key={`${item.name}-${index}`} className="testimonial-card testimonial-marquee-item" aria-hidden={index >= TESTIMONIALS.length}>
                 <div className="testimonial-head">
                   <div className="testimonial-avatar">
-                    <img src={item.avatar} alt={index < TESTIMONIALS.length ? item.name : ''} loading="lazy" onError={handleImageError} />
+                    <img
+                      src={item.avatar}
+                      alt={index < TESTIMONIALS.length ? item.name : ''}
+                      loading="lazy"
+                      onError={handleImageError}
+                    />
                     <div>
                       <strong>{item.name}</strong>
                       <div className="hero-subtitle">{item.role}</div>
@@ -1141,58 +902,22 @@ export default function Landing() {
         </div>
       </m.section>
 
-      <m.section
-        className="landing-section"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.25 }}
-        variants={stagger}
-      >
-        <m.div className="section-head" variants={fadeUp}>
-          <span className="section-kicker">Buyer confidence</span>
-          <h3>Why teams upgrade beyond basic coaching tools</h3>
-          <p>Edvatiq combines coaching execution, athlete review, and operations in one environment.</p>
-        </m.div>
-        <m.div className="case-study-grid" variants={stagger}>
-          {CASE_STUDIES.map((item) => (
-            <m.article key={item.title} className="case-study-card" variants={fadeUp}>
-              <span className="case-study-label">Use case</span>
-              <h4>{item.title}</h4>
-              <strong>{item.result}</strong>
-              <p>{item.detail}</p>
-            </m.article>
-          ))}
-        </m.div>
-      </m.section>
-
-      <m.section
-        id="plans"
-        ref={registerSection('plans')}
-        className="plans-section landing-section"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.25 }}
-        variants={stagger}
-      >
+      <m.section id="plans" ref={registerSection('plans')} className="plans-section landing-section" initial={false} whileInView="visible" viewport={{ once: true, amount: 0.25 }} variants={stagger}>
         <m.div className="section-head" variants={fadeUp}>
           <span className="section-kicker">Pricing</span>
           <h3>Plans for every scale</h3>
           <p>Start personal or equip a full academy in minutes.</p>
         </m.div>
-        <m.div className="plans-grid" variants={stagger}>
+        <m.div className="plans-grid plans-grid-pro" variants={stagger}>
           {plans.map((plan, index) => (
-            <m.article
-              key={plan.code || plan.name}
-              className={`plan-card ${index === 1 ? 'featured' : ''}`}
-              variants={fadeUp}
-            >
-              <div>
-                {index === 1 ? <span className="plan-badge">Most popular</span> : null}
+            <m.article key={plan.code || plan.name} className={`plan-card ${index === 1 ? 'featured' : ''}`} variants={fadeUp}>
+              <div className="plan-card-top">
+                {index === 1 ? <span className="plan-badge">Most popular</span> : <span className="plan-badge subtle">Flexible</span>}
                 <p className="plan-tier">{plan.name}</p>
                 <h4>{formatPrice(plan.amount_inr)}</h4>
                 <p className="plan-subtitle">{plan.description || 'Flexible training plan.'}</p>
               </div>
-              <ul>
+              <ul className="plan-feature-list">
                 {(plan.features || []).map((item) => (
                   <li key={item}>
                     <CheckCircle2 size={16} />
@@ -1200,45 +925,104 @@ export default function Landing() {
                   </li>
                 ))}
               </ul>
-              <Link className="primary-button" to={`/signup?plan=${plan.code || ''}`}>Choose Plan</Link>
+              <div className="plan-card-foot">
+                <span className="plan-footnote">
+                  {index > 1 ? 'Best for teams and academies' : 'Best for individual training'}
+                </span>
+                <Link className="primary-button" to={`/signup?plan=${plan.code || ''}`}>Choose Plan</Link>
+              </div>
             </m.article>
           ))}
         </m.div>
-        <m.div className="plan-compare-card" variants={fadeUp}>
-          <div className="section-head compact">
-            <span className="section-kicker">Compare plans</span>
-            <h3>See what changes as you scale</h3>
-          </div>
-          <div className="plan-compare-table">
-            <div className="plan-compare-head">
-              <span>Capability</span>
-              <span>Personal Basic</span>
-              <span>Personal Pro</span>
-              <span>Org Basic</span>
-              <span>Org Pro</span>
-            </div>
-            {PLAN_COMPARISON.map((row) => (
-              <div key={row.feature} className="plan-compare-row">
-                <span>{row.feature}</span>
-                <span>{row.personal_basic ? 'Included' : '-'}</span>
-                <span>{row.personal_pro ? 'Included' : '-'}</span>
-                <span>{row.org_basic ? 'Included' : '-'}</span>
-                <span>{row.org_pro ? 'Included' : '-'}</span>
-              </div>
-            ))}
-          </div>
-        </m.div>
       </m.section>
 
-      <m.section
-        id="faq"
-        ref={registerSection('faq')}
-        className="landing-section section-soft"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.25 }}
-        variants={stagger}
-      >
+      <m.section id="book-demo" ref={registerSection('book-demo')} className="landing-section section-soft" initial={false} whileInView="visible" viewport={{ once: true, amount: 0.2 }} variants={stagger}>
+        <m.div className="section-head" variants={fadeUp}>
+          <span className="section-kicker">Guided walkthrough</span>
+          <h3>Book a demo without leaving the landing page</h3>
+          <p>Share your team details and we will schedule a tailored walkthrough of Edvatiq.</p>
+        </m.div>
+        <div className="lead-grid">
+          <section className="lead-info">
+            <img
+              src="https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=1200&q=80"
+              alt="Coach reviewing athlete performance"
+              loading="lazy"
+              onError={handleImageError}
+            />
+            <div className="lead-info-card">
+              <h3>What you will see</h3>
+              <ul>
+                <li>Live posture tracking and corrections</li>
+                <li>Session intelligence and best-rep insights</li>
+                <li>Admin workflows for teams and academies</li>
+              </ul>
+            </div>
+          </section>
+          <section className="panel lead-card">
+            {demoSubmitted ? (
+              <div className="lead-success">
+                <h3>Request received</h3>
+                <p>Our team will reach out within 24 hours to schedule your demo.</p>
+              </div>
+            ) : (
+              <form className="form-grid form-grid-xl" onSubmit={handleDemoSubmit(handleDemoRequest)}>
+                <label className="field">
+                  <span className="field-label">Name</span>
+                  <input {...registerDemo('name', { required: true })} />
+                </label>
+                <label className="field">
+                  <span className="field-label">Email</span>
+                  <input type="email" {...registerDemo('email', { required: true })} />
+                </label>
+                <label className="field">
+                  <span className="field-label">Organization</span>
+                  <input {...registerDemo('organization')} />
+                </label>
+                <div className="form-inline">
+                  <label className="field">
+                    <span className="field-label">Role</span>
+                    <input {...registerDemo('role')} placeholder="Coach, owner, manager" />
+                  </label>
+                  <label className="field">
+                    <span className="field-label">Team Size</span>
+                    <input {...registerDemo('team_size')} placeholder="10-20" />
+                  </label>
+                </div>
+                <div className="form-inline">
+                  <label className="field">
+                    <span className="field-label">Timeline</span>
+                    <select {...registerDemo('timeline')}>
+                      <option value="">Select timeline</option>
+                      <option value="this_month">This month</option>
+                      <option value="next_month">Next month</option>
+                      <option value="this_quarter">This quarter</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span className="field-label">Preferred Contact</span>
+                    <select {...registerDemo('preferred_contact')}>
+                      <option value="">Select</option>
+                      <option value="email">Email</option>
+                      <option value="phone">Phone</option>
+                      <option value="whatsapp">WhatsApp</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="field">
+                  <span className="field-label">Goals</span>
+                  <textarea rows={4} {...registerDemo('goals')} placeholder="Tell us what you want to improve." />
+                </label>
+                <button type="submit" className="primary-button" disabled={isDemoSubmitting}>
+                  {isDemoSubmitting ? 'Submitting...' : 'Request Demo'}
+                </button>
+              </form>
+            )}
+          </section>
+        </div>
+      </m.section>
+
+      <m.section id="faq" ref={registerSection('faq')} className="landing-section section-soft" initial={false} whileInView="visible" viewport={{ once: true, amount: 0.25 }} variants={stagger}>
         <m.div className="section-head" variants={fadeUp}>
           <span className="section-kicker">FAQ</span>
           <h3>Frequently asked questions</h3>
@@ -1270,19 +1054,11 @@ export default function Landing() {
                     <span>{item.q}</span>
                     <span className="faq-icon">{isOpen ? '-' : '+'}</span>
                   </button>
-                  <AnimatePresence initial={false}>
-                    {isOpen ? (
-                      <m.div
-                        className="faq-panel"
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.35, ease: 'easeOut' }}
-                      >
-                        <p className="hero-subtitle">{item.a}</p>
-                      </m.div>
-                    ) : null}
-                  </AnimatePresence>
+                  {isOpen ? (
+                    <div className="faq-panel">
+                      <p className="hero-subtitle">{item.a}</p>
+                    </div>
+                  ) : null}
                 </m.div>
               );
             })}
@@ -1290,13 +1066,7 @@ export default function Landing() {
         </div>
       </m.section>
 
-      <m.section
-        className="cta-section landing-section"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.4 }}
-        variants={fadeUp}
-      >
+      <m.section className="cta-section landing-section" initial={false} whileInView="visible" viewport={{ once: true, amount: 0.4 }} variants={fadeUp}>
         <div className="cta-ornament" aria-hidden="true">
           <svg viewBox="0 0 200 200">
             <circle cx="100" cy="100" r="90" fill="rgba(247, 201, 72, 0.2)" />
@@ -1316,7 +1086,7 @@ export default function Landing() {
           </ul>
         </div>
         <div className="cta-actions">
-          <Link className="primary-button demo-button" to="/book-demo">Book a Demo</Link>
+          <button type="button" className="primary-button demo-button" onClick={() => handleNavClick('book-demo')}>Book a Demo</button>
           <Link className="ghost-button" to="/signup?plan=personal_basic">Start Personal</Link>
         </div>
       </m.section>
@@ -1342,8 +1112,8 @@ export default function Landing() {
           <div>
             <h5>Company</h5>
             <ul>
-              <li><Link to="/support">Support</Link></li>
-              <li><Link to="/book-demo">Book a Demo</Link></li>
+              <li><button type="button" onClick={() => handleNavClick('book-demo')}>Support</button></li>
+              <li><button type="button" onClick={() => handleNavClick('book-demo')}>Book a Demo</button></li>
               <li><Link to="/privacy">Privacy Policy</Link></li>
               <li><Link to="/terms">Terms & Conditions</Link></li>
             </ul>
@@ -1358,8 +1128,8 @@ export default function Landing() {
                 Get a tailored walkthrough for your academy or squad in under 30 minutes.
               </p>
               <div className="footer-cta-actions">
-                <Link className="primary-button demo-button" to="/book-demo">Book a Demo</Link>
-                <Link className="ghost-button" to="/support">Contact Support</Link>
+                <button type="button" className="primary-button demo-button" onClick={() => handleNavClick('book-demo')}>Book a Demo</button>
+                <button type="button" className="ghost-button" onClick={() => handleNavClick('book-demo')}>Contact Support</button>
               </div>
             </div>
           </div>
@@ -1372,5 +1142,3 @@ export default function Landing() {
     </div>
   );
 }
-
-

@@ -19,3 +19,18 @@ export async function getLiveCoachGuidance(payload) {
   const resp = await api.post('/chat/live-guidance', payload);
   return resp.data;
 }
+
+export async function getWalletSummary() {
+  const resp = await api.get('/wallet/summary');
+  return resp.data;
+}
+
+export async function listWalletTransactions(limit = 20) {
+  const resp = await api.get('/wallet/transactions', { params: { limit } });
+  return resp.data || [];
+}
+
+export async function topUpWallet(payload) {
+  const resp = await api.post('/wallet/top-up', payload);
+  return resp.data;
+}

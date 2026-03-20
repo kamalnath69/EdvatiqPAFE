@@ -1,8 +1,7 @@
-import { useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import { useAuthUser } from '../hooks/useAuthUser';
 
 export default function Navbar() {
-  const { user, logout } = useContext(AuthContext);
+  const { user, logout } = useAuthUser();
 
   return (
     <nav className="bg-white shadow">

@@ -1,9 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, KeyRound, Lock, MessageSquare, Send, Settings2, Sparkles, Volume2 } from 'lucide-react';
-import { askCoach, getCoachConfig, updateCoachConfig } from '../services/chatApi';
+import {
+  Bot,
+  Coins,
+  KeyRound,
+  Lock,
+  MessageSquare,
+  Send,
+  Settings2,
+  Volume2,
+  Wallet,
+} from 'lucide-react';
+import {
+  askCoach,
+  getCoachConfig,
+  getWalletSummary,
+  updateCoachConfig,
+} from '../services/chatApi';
 import { getErrorMessage } from '../services/httpError';
 import { useAuthUser } from '../hooks/useAuthUser';
+import { startWalletRecharge } from '../services/walletCheckout';
+import { buildRechargePresets } from '../utils/wallet';
 
 const VOICE_STYLE_OPTIONS = [
   { value: 'calm', label: 'Calm' },
@@ -21,11 +38,15 @@ function buildIntroMessage(user) {
   const sport = user?.assigned_sport || 'your sport';
   return {
     role: 'assistant',
-    text: `I’m your live AI coach for ${sport}. Ask for corrections, drills, or a session review and I’ll respond like an actual coach, not a placeholder.`,
+    text: `I'm your live AI coach for ${sport}. Ask for corrections, drills, or session review and I'll respond with practical guidance you can use right away.`,
   };
 }
 
-export default function AiCoachChat({ enabled = true }) {
+function formatBalance(value) {
+  return `${Number(value || 0).toFixed(2)} credits`;
+}
+
+export default function AiCoachChat({ enabled = true, onWalletChange }) {
   const { user } = useAuthUser();
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -34,13 +55,22 @@ export default function AiCoachChat({ enabled = true }) {
   const [loading, setLoading] = useState(false);
   const [configLoading, setConfigLoading] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
+  const [toppingUp, setToppingUp] = useState(false);
   const [config, setConfig] = useState({
     configured: false,
     api_key_masked: null,
+    key_source: 'personal',
+    platform_key_available: false,
+    wallet_balance: 0,
+    wallet_currency: 'credits',
+    credit_rate_per_1k_tokens: 1,
+    inr_per_credit: 1,
+    suggested_top_up: 100,
     voice_enabled: true,
     live_guidance_enabled: true,
     voice_style: 'calm',
   });
+  const [wallet, setWallet] = useState(null);
   const [apiKeyDraft, setApiKeyDraft] = useState('');
   const scrollerRef = useRef(null);
 
@@ -48,19 +78,29 @@ export default function AiCoachChat({ enabled = true }) {
     setMessages([buildIntroMessage(user)]);
   }, [user]);
 
+  async function refreshWallet() {
+    try {
+      const summary = await getWalletSummary();
+      setWallet(summary);
+      if (onWalletChange) onWalletChange(summary);
+      return summary;
+    } catch {
+      return null;
+    }
+  }
+
   useEffect(() => {
     if (!open || !enabled) return;
     let active = true;
     setConfigLoading(true);
-    getCoachConfig()
-      .then((data) => {
-        if (!active) return;
-        setConfig(data);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (active) setConfigLoading(false);
-      });
+    Promise.allSettled([getCoachConfig(), refreshWallet()]).then((results) => {
+      if (!active) return;
+      const configResult = results[0];
+      if (configResult.status === 'fulfilled') {
+        setConfig(configResult.value);
+      }
+      setConfigLoading(false);
+    });
     return () => {
       active = false;
     };
@@ -75,12 +115,20 @@ export default function AiCoachChat({ enabled = true }) {
     () => messages.filter((item) => item.role === 'assistant').length,
     [messages]
   );
+  const topUpPresets = useMemo(
+    () => buildRechargePresets(wallet?.suggested_top_up ?? config.suggested_top_up, 3),
+    [wallet?.suggested_top_up, config.suggested_top_up]
+  );
+
+  const usingPlatformKey = config.key_source === 'platform';
+  const canUseCoach = config.configured && (!usingPlatformKey || Number(wallet?.balance || config.wallet_balance || 0) > 0);
 
   async function handleSaveConfig() {
     setSavingConfig(true);
     try {
       const data = await updateCoachConfig({
         api_key: apiKeyDraft.trim() || undefined,
+        key_source: config.key_source,
         voice_enabled: config.voice_enabled,
         live_guidance_enabled: config.live_guidance_enabled,
         voice_style: config.voice_style,
@@ -88,6 +136,7 @@ export default function AiCoachChat({ enabled = true }) {
       setConfig(data);
       setApiKeyDraft('');
       setSettingsOpen(false);
+      await refreshWallet();
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -95,6 +144,34 @@ export default function AiCoachChat({ enabled = true }) {
       ]);
     } finally {
       setSavingConfig(false);
+    }
+  }
+
+  async function handleTopUp(credits) {
+    setToppingUp(true);
+    try {
+      const summary = await startWalletRecharge({
+        credits,
+        note: `Added ${credits} credits from AI Coach.`,
+        prefill: {
+          name: user?.full_name || user?.username,
+          email: user?.email,
+        },
+      });
+      setWallet(summary);
+      if (onWalletChange) onWalletChange(summary);
+      setConfig((prev) => ({ ...prev, wallet_balance: summary.balance }));
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', text: `Wallet updated. ${credits} credits were added and your new balance is ${formatBalance(summary.balance)}.` },
+      ]);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', text: getErrorMessage(err, 'Unable to add wallet credits right now.') },
+      ]);
+    } finally {
+      setToppingUp(false);
     }
   }
 
@@ -115,7 +192,13 @@ export default function AiCoachChat({ enabled = true }) {
           experience_level: user?.experience_level || '',
         },
       });
-      setMessages((prev) => [...prev, { role: 'assistant', text: resp.answer }]);
+      const usageLine =
+        resp.key_source === 'platform'
+          ? `Default key used. ${resp.credits_charged || 0} credits consumed for ${resp.tokens_used || 0} tokens.`
+          : 'Personal key used for this reply.';
+      setMessages((prev) => [...prev, { role: 'assistant', text: `${resp.answer}\n\n${usageLine}` }]);
+      setConfig((prev) => ({ ...prev, wallet_balance: resp.wallet_balance ?? prev.wallet_balance }));
+      await refreshWallet();
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -154,15 +237,15 @@ export default function AiCoachChat({ enabled = true }) {
       <button type="button" className="ai-coach-toggle" onClick={() => setOpen((v) => !v)}>
         <MessageSquare size={18} />
         <span>AI Coach</span>
-        {config.configured ? <Sparkles size={16} /> : <KeyRound size={16} />}
+        <span className="ai-coach-toggle-pill">{usingPlatformKey ? 'Wallet' : 'Personal'}</span>
       </button>
       {open ? (
-        <div className="ai-coach-panel ai-coach-panel-rich">
+        <div className="ai-coach-panel ai-coach-panel-rich ai-coach-panel-pro">
           <div className="ai-coach-header">
             <div>
-              <strong>Performance Coach</strong>
+              <strong>Performance AI Coach</strong>
               <p className="ai-coach-subtitle">
-                Conversational coaching backed by your own OpenAI API key.
+                Switch between your own OpenAI key and the platform key backed by wallet credits.
               </p>
             </div>
             <div className="ai-coach-head-actions">
@@ -180,24 +263,93 @@ export default function AiCoachChat({ enabled = true }) {
             </div>
           </div>
 
+          <div className="ai-coach-mode-strip">
+            <div className="ai-mode-card">
+              <small>Key mode</small>
+              <strong>{usingPlatformKey ? 'Default platform key' : 'Personal OpenAI key'}</strong>
+            </div>
+            <div className="ai-mode-card">
+              <small>Wallet</small>
+              <strong>{formatBalance(wallet?.balance ?? config.wallet_balance)}</strong>
+            </div>
+            <div className="ai-mode-card">
+              <small>Rate</small>
+              <strong>{config.credit_rate_per_1k_tokens} credit / 1K tokens</strong>
+            </div>
+          </div>
+
           {settingsOpen || (!config.configured && !configLoading) ? (
-            <section className="ai-config-card">
+            <section className="ai-config-card ai-config-card-pro">
               <div className="ai-config-head">
                 <div>
-                  <h4>Coach Setup</h4>
-                  <p>Paste your OpenAI API key once. It will be stored server-side and masked in the UI.</p>
+                  <h4>AI Source & Wallet</h4>
+                  <p>Choose how the coach should run, then control voice and live guidance from the same panel.</p>
                 </div>
-                {config.api_key_masked ? <span className="status-badge neutral">{config.api_key_masked}</span> : null}
+                <span className="status-badge neutral">{config.api_key_masked || 'No personal key saved'}</span>
               </div>
-              <label className="field">
-                <span className="field-label">OpenAI API Key</span>
-                <input
-                  type="password"
-                  value={apiKeyDraft}
-                  onChange={(e) => setApiKeyDraft(e.target.value)}
-                  placeholder={config.configured ? 'Leave blank to keep current key' : 'sk-...'}
-                />
-              </label>
+
+              <div className="segmented-toggle">
+                <button
+                  type="button"
+                  className={`segmented-toggle-item ${config.key_source === 'personal' ? 'active' : ''}`}
+                  onClick={() => setConfig((prev) => ({ ...prev, key_source: 'personal' }))}
+                >
+                  <KeyRound size={15} />
+                  Personal key
+                </button>
+                <button
+                  type="button"
+                  className={`segmented-toggle-item ${config.key_source === 'platform' ? 'active' : ''}`}
+                  onClick={() => setConfig((prev) => ({ ...prev, key_source: 'platform' }))}
+                  disabled={!config.platform_key_available}
+                >
+                  <Wallet size={15} />
+                  Default key
+                </button>
+              </div>
+
+              {config.key_source === 'personal' ? (
+                <label className="field">
+                  <span className="field-label">OpenAI API Key</span>
+                  <input
+                    type="password"
+                    value={apiKeyDraft}
+                    onChange={(e) => setApiKeyDraft(e.target.value)}
+                    placeholder={config.api_key_masked ? 'Leave blank to keep current key' : 'sk-...'}
+                  />
+                </label>
+              ) : (
+                <div className="ai-wallet-panel">
+                  <div className="ai-wallet-summary">
+                    <div>
+                      <small>Available balance</small>
+                      <strong>{formatBalance(wallet?.balance ?? config.wallet_balance)}</strong>
+                    </div>
+                    <div>
+                      <small>Platform key</small>
+                      <strong>{config.platform_key_available ? 'Ready' : 'Unavailable'}</strong>
+                    </div>
+                  </div>
+                  <div className="ai-wallet-topups">
+                    {topUpPresets.map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => handleTopUp(preset)}
+                        disabled={toppingUp}
+                      >
+                        <Coins size={15} />
+                        Add {preset} credits
+                      </button>
+                    ))}
+                  </div>
+                  <small className="help-text">
+                    {`Pricing set by admin: ₹${Number(config.inr_per_credit || 1).toFixed(2)} per credit.`}
+                  </small>
+                </div>
+              )}
+
               <div className="ai-config-grid">
                 <label className="check-field">
                   <input
@@ -239,12 +391,18 @@ export default function AiCoachChat({ enabled = true }) {
 
           {configLoading ? <p className="help-text">Loading coach settings...</p> : null}
 
-          {!configLoading && !config.configured ? (
+          {!configLoading && !canUseCoach ? (
             <div className="ai-empty-state">
               <Bot size={18} />
               <div>
-                <strong>Add your OpenAI API key to activate the coach.</strong>
-                <p>The coach will then use your current role, sport, and session context for real answers.</p>
+                <strong>
+                  {usingPlatformKey
+                    ? 'Add credits to use the default AI key.'
+                    : 'Add your OpenAI key or switch to the default key.'}
+                </strong>
+                <p>
+                  Personal mode uses your own API key. Default-key mode deducts credits from your workspace wallet based on token usage.
+                </p>
               </div>
             </div>
           ) : (
@@ -255,7 +413,7 @@ export default function AiCoachChat({ enabled = true }) {
                   <Volume2 size={14} />
                   Voice {config.voice_enabled ? 'On' : 'Off'}
                 </span>
-                <span className="status-badge neutral">Style: {config.voice_style}</span>
+                <span className="status-badge neutral">{usingPlatformKey ? 'Default key active' : 'Personal key active'}</span>
               </div>
 
               <div ref={scrollerRef} className="ai-coach-messages ai-coach-messages-rich">
@@ -266,9 +424,13 @@ export default function AiCoachChat({ enabled = true }) {
                   </article>
                 ))}
                 {loading ? (
-                  <article className="ai-msg assistant">
+                  <article className="ai-msg assistant ai-msg-loading">
                     <span className="ai-msg-role">Coach</span>
-                    <div>Thinking through your training context...</div>
+                    <div className="typing-dots">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
                   </article>
                 ) : null}
               </div>

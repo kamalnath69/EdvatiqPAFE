@@ -1,20 +1,30 @@
 import clsx from 'clsx';
-import { Activity, ChevronsLeft, ChevronsRight, ShieldCheck, Sparkles } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Coins, Wallet } from 'lucide-react';
+import { buildRechargePresets } from '../../utils/wallet';
 
-export default function Sidebar({ sections = [], activeSection, onChange, collapsed = false, onToggleCollapse }) {
+export default function Sidebar({
+  sections = [],
+  activeSection,
+  onChange,
+  collapsed = false,
+  onToggleCollapse,
+  walletSummary = null,
+  walletCharging = false,
+  onQuickTopUp,
+}) {
+  const balance = Number(walletSummary?.balance || 0).toFixed(2);
+  const modeLabel = walletSummary?.preferred_key_source === 'platform' ? 'Default key' : 'Personal key';
+  const topUpPresets = buildRechargePresets(walletSummary?.suggested_top_up, 2);
+
   return (
     <aside className="sidebar">
-      <div className="brand-block">
-        <div className="brand-icon">
-          <Activity size={20} />
-        </div>
-        <div className={clsx(collapsed && 'is-hidden')}>
-          <p className="brand-kicker">Performance</p>
-          <p className="brand-name">Edvatiq</p>
-          <span className="brand-badge">
-            <Sparkles size={12} />
-            Camera-first coaching
-          </span>
+      <div className="sidebar-top">
+        <div className="brand-block">
+          <div className="brand-icon">E</div>
+          <div className={clsx(collapsed && 'is-hidden')}>
+            <p className="brand-kicker">Workspace</p>
+            <p className="brand-name">Edvatiq</p>
+          </div>
         </div>
         <button type="button" className="collapse-hitbox" onClick={onToggleCollapse} aria-label="Toggle sidebar">
           <span className="icon-button collapse-btn-icon">
@@ -23,8 +33,8 @@ export default function Sidebar({ sections = [], activeSection, onChange, collap
         </button>
       </div>
 
-      <div className={clsx('sidebar-intro', collapsed && 'is-hidden')}>
-        <p>Unified coaching, athlete review, and academy operations in one workspace.</p>
+      <div className={clsx('sidebar-section-label', collapsed && 'is-hidden')}>
+        Navigation
       </div>
 
       <nav className="side-nav">
@@ -41,12 +51,48 @@ export default function Sidebar({ sections = [], activeSection, onChange, collap
           </button>
         ))}
       </nav>
-      <div className={clsx('side-footer', collapsed && 'is-hidden')}>
-        <div className="status-chip">
-          <ShieldCheck size={14} />
-          <span>RBAC Active</span>
+
+      <div className="sidebar-wallet-card">
+        <div className="sidebar-wallet-head">
+          <div className="sidebar-wallet-icon">
+            <Wallet size={16} />
+          </div>
+          <div className={clsx(collapsed && 'is-hidden')}>
+            <strong>Wallet</strong>
+            <small>{modeLabel}</small>
+          </div>
         </div>
-        <small>Enterprise Workspace</small>
+        <div className={clsx('sidebar-wallet-balance', collapsed && 'is-hidden')}>
+          <Coins size={14} />
+          <span>{balance} credits</span>
+        </div>
+        <div className={clsx('sidebar-wallet-note', collapsed && 'is-hidden')}>
+          Quick recharge for default AI key usage
+        </div>
+        <div className={clsx('sidebar-wallet-actions', collapsed && 'is-hidden')}>
+          {topUpPresets.map((credits) => (
+            <button
+              key={credits}
+              type="button"
+              className="sidebar-wallet-action"
+              onClick={() => onQuickTopUp?.(credits)}
+              disabled={walletCharging}
+            >
+              +{credits}
+            </button>
+          ))}
+        </div>
+        {collapsed ? (
+          <button
+            type="button"
+            className="sidebar-wallet-action sidebar-wallet-action-collapsed"
+            onClick={() => onQuickTopUp?.(topUpPresets[0] || 100)}
+            disabled={walletCharging}
+            title={`Add ${topUpPresets[0] || 100} credits`}
+          >
+            +
+          </button>
+        ) : null}
       </div>
     </aside>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, Building2, ShieldCheck, Users } from 'lucide-react';
+import { Activity, Bell, Building2, CalendarDays, CreditCard, FileText, Link2, Settings2, ShieldCheck, Users, Zap } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 import PageShell from './ui/PageShell';
@@ -15,6 +15,18 @@ import { useLeads } from '../hooks/useLeads';
 import ProfileSection from './ProfileSection';
 import PolicyManager from './PolicyManager';
 import PlanManager from './PlanManager';
+import {
+  WorkspaceAuditSection,
+  WorkspaceBillingSection,
+  WorkspaceCalendarSection,
+  WorkspaceFavoritesPanel,
+  WorkspaceHelpSection,
+  WorkspaceInviteSection,
+  WorkspaceNotificationsSection,
+  WorkspaceReportsSection,
+  WorkspaceSettingsSection,
+  WorkspaceSystemSection,
+} from './WorkspaceModules';
 import { getErrorMessage } from '../services/httpError';
 import { SPORTS } from '../constants/sports';
 import { useToast } from '../hooks/useToast';
@@ -69,13 +81,20 @@ export default function AdminDashboard() {
 
   const sections = [
     { key: 'overview', label: 'Overview', icon: <Activity size={16} /> },
+    { key: 'notifications', label: 'Notifications', icon: <Bell size={16} />, sidebarHidden: true },
+    { key: 'reports', label: 'Reports', icon: <FileText size={16} /> },
+    { key: 'calendar', label: 'Calendar', icon: <CalendarDays size={16} /> },
+    { key: 'audit', label: 'Audit', icon: <ShieldCheck size={16} /> },
+    { key: 'billing', label: 'Billing', icon: <CreditCard size={16} /> },
+    { key: 'system', label: 'System', icon: <Zap size={16} /> },
+    { key: 'invites', label: 'Invites', icon: <Link2 size={16} /> },
     { key: 'academies', label: 'Academies', icon: <Building2 size={16} /> },
     { key: 'users', label: 'Users', icon: <Users size={16} /> },
     { key: 'actions', label: 'Quick Actions', icon: <ShieldCheck size={16} /> },
     { key: 'leads', label: 'Leads', icon: <Activity size={16} /> },
     { key: 'plans', label: 'Plans', icon: <ShieldCheck size={16} /> },
     { key: 'policies', label: 'Policies', icon: <ShieldCheck size={16} /> },
-    { key: 'profile', label: 'Profile', icon: <Users size={16} /> },
+    { key: 'settings', label: 'Settings', icon: <Settings2 size={16} /> },
   ];
 
   const academyRows = useMemo(
@@ -318,8 +337,23 @@ export default function AdminDashboard() {
                   },
                 ]}
               />
+              <WorkspaceFavoritesPanel />
             </>
           ) : null}
+
+          {section === 'notifications' ? <WorkspaceNotificationsSection /> : null}
+
+          {section === 'reports' ? <WorkspaceReportsSection role="admin" students={users.data.filter((item) => item.role === 'student')} /> : null}
+
+          {section === 'calendar' ? <WorkspaceCalendarSection students={users.data.filter((item) => item.role === 'student')} role="admin" /> : null}
+
+          {section === 'audit' ? <WorkspaceAuditSection /> : null}
+
+          {section === 'billing' ? <WorkspaceBillingSection /> : null}
+
+          {section === 'system' ? <WorkspaceSystemSection /> : null}
+
+          {section === 'invites' ? <WorkspaceInviteSection defaultRole="academy_admin" /> : null}
 
           {section === 'academies' ? (
             <div className="panel-grid">
@@ -528,8 +562,6 @@ export default function AdminDashboard() {
             </div>
           ) : null}
 
-          {section === 'profile' ? <ProfileSection /> : null}
-
           {section === 'plans' ? (
             <section className="panel enterprise-panel">
               <div className="panel-header">
@@ -643,6 +675,14 @@ export default function AdminDashboard() {
                 ]}
               />
             </section>
+          ) : null}
+
+          {section === 'settings' ? (
+            <div className="panel-grid">
+              <WorkspaceSettingsSection canManageAcademy canManagePlatform />
+              <WorkspaceHelpSection canManage />
+              <ProfileSection />
+            </div>
           ) : null}
 
           <ConfirmDialog

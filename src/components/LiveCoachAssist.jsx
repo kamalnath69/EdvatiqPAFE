@@ -192,8 +192,8 @@ export default function LiveCoachAssist({
         <div className="ai-live-empty">
           <Bot size={18} />
           <div>
-            <strong>Add your OpenAI API key in the AI Coach panel to activate live guidance.</strong>
-            <p>Once configured, the coach will speak short cues while you train.</p>
+            <strong>Finish AI setup in the coach panel to activate live guidance.</strong>
+            <p>Use your own API key or switch to the default platform key with wallet credits.</p>
           </div>
         </div>
       ) : null}
@@ -212,6 +212,10 @@ export default function LiveCoachAssist({
             <article className="metric-tile">
               <p>Style</p>
               <strong>{config.voice_style || 'calm'}</strong>
+            </article>
+            <article className="metric-tile">
+              <p>Source</p>
+              <strong>{config.key_source === 'platform' ? 'Wallet' : 'Personal'}</strong>
             </article>
             <article className="metric-tile">
               <p>Guidance</p>

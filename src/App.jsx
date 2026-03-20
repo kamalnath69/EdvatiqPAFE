@@ -1,24 +1,22 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { useContext } from 'react';
 import Login from './components/Login';
-import Landing from './pages/Landing';
-import Pricing from './pages/Pricing';
-import Signup from './pages/Signup';
-import Support from './pages/Support';
-import BookDemo from './pages/BookDemo';
-import Privacy from './pages/Privacy';
-import Terms from './pages/Terms';
-import ForgotPassword from './pages/ForgotPassword';
-import VerifyEmail from './pages/VerifyEmail';
-import ResetPassword from './pages/ResetPassword';
-import NotFound from './pages/NotFound';
-import AdminDashboard from './components/AdminDashboard';
-import StaffDashboard from './components/StaffDashboard';
-import StudentDashboard from './components/StudentDashboard';
-import { AuthContext } from './context/auth-context';
+import { useAuthUser } from './hooks/useAuthUser';
+
+const Landing = lazy(() => import('./pages/Landing'));
+const Signup = lazy(() => import('./pages/Signup'));
+const Privacy = lazy(() => import('./pages/Privacy'));
+const Terms = lazy(() => import('./pages/Terms'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const StaffDashboard = lazy(() => import('./components/StaffDashboard'));
+const StudentDashboard = lazy(() => import('./components/StudentDashboard'));
 
 function ProtectedDashboard() {
-  const { user, loadingUser } = useContext(AuthContext);
+  const { user, loadingUser } = useAuthUser();
   if (loadingUser) {
     return <div className="page-loading">Loading your workspace...</div>;
   }
@@ -30,7 +28,7 @@ function ProtectedDashboard() {
 }
 
 function LoginGate() {
-  const { user, loadingUser } = useContext(AuthContext);
+  const { user, loadingUser } = useAuthUser();
   if (loadingUser) {
     return <div className="page-loading">Checking your session...</div>;
   }
@@ -40,21 +38,23 @@ function LoginGate() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/pricing" element={<Pricing />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/book-demo" element={<BookDemo />} />
-        <Route path="/support" element={<Support />} />
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="/terms" element={<Terms />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/login" element={<LoginGate />} />
-        <Route path="/dashboard" element={<ProtectedDashboard />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <Suspense fallback={<div className="page-loading">Loading workspace...</div>}>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/pricing" element={<Navigate to="/#plans" replace />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/book-demo" element={<Navigate to="/#book-demo" replace />} />
+          <Route path="/support" element={<Navigate to="/#book-demo" replace />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/login" element={<LoginGate />} />
+          <Route path="/dashboard" element={<ProtectedDashboard />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

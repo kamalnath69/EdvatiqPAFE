@@ -246,6 +246,7 @@ export default function LiveTrainer({
     return Number.isFinite(score) ? score : null;
   }, [training]);
   const overlayFitMode = fullscreen ? 'contain' : 'cover';
+  const liveStatusLabel = live.running ? (live.paused ? 'Paused' : 'Tracking Live') : 'Ready';
 
   function getElapsedSeconds(nowMs = Date.now()) {
     const c = clockRef.current;
@@ -500,67 +501,92 @@ export default function LiveTrainer({
   }
 
   const detailsContent = (
-    <>
-      <div className="metrics-grid compact">
-        <article className="metric-tile">
-          <p>Overall Score</p>
-          <strong>{sessionScore ?? '--'} / 100</strong>
-        </article>
-        <article className="metric-tile">
-          <p>Tracking Quality</p>
-          <strong>{advanced.tracking_quality ?? '--'}</strong>
-        </article>
-        <article className="metric-tile">
-          <p>Rep Count</p>
-          <strong>{training.rep_count ?? 0}</strong>
-        </article>
-        <article className="metric-tile">
-          <p>Current Phase</p>
-          <strong>{training.phase || '--'}</strong>
-        </article>
-      </div>
-      <h3 className="panel-title">Live Corrections</h3>
-      {!feedback.length ? (
-        <p className="help-text">No corrections right now.</p>
-      ) : (
-        <ul className="feedback-list">
-          {feedback.map((item, idx) => (
-            <li key={`${item}-${idx}`}>{item}</li>
-          ))}
-        </ul>
-      )}
-      <h3 className="panel-title">Live Angles</h3>
-      <div className="metrics-grid compact">
-        {angleEntries.length ? (
-          angleEntries.map((item) => (
-            <article key={item.key} className="metric-tile">
-              <p>{item.label}</p>
-              <strong>{item.value?.toFixed(2)}</strong>
-            </article>
-          ))
+    <div className="live-detail-stack">
+      <section className="live-detail-block live-detail-block-highlight">
+        <div className="live-detail-heading">
+          <span>Live Summary</span>
+          <strong>Session intelligence at a glance</strong>
+        </div>
+        <div className="metrics-grid compact">
+          <article className="metric-tile">
+            <p>Overall Score</p>
+            <strong>{sessionScore ?? '--'} / 100</strong>
+          </article>
+          <article className="metric-tile">
+            <p>Tracking Quality</p>
+            <strong>{advanced.tracking_quality ?? '--'}</strong>
+          </article>
+          <article className="metric-tile">
+            <p>Rep Count</p>
+            <strong>{training.rep_count ?? 0}</strong>
+          </article>
+          <article className="metric-tile">
+            <p>Current Phase</p>
+            <strong>{training.phase || '--'}</strong>
+          </article>
+        </div>
+      </section>
+
+      <section className="live-detail-block">
+        <div className="live-detail-heading">
+          <span>Corrections</span>
+          <strong>{feedback.length ? 'Active technique cues' : 'No urgent correction right now'}</strong>
+        </div>
+        {!feedback.length ? (
+          <p className="help-text">The athlete is currently in a stable state. New correction cues will appear here.</p>
         ) : (
-          <p className="help-text">No angle metrics received yet.</p>
+          <ul className="feedback-list">
+            {feedback.map((item, idx) => (
+              <li key={`${item}-${idx}`}>{item}</li>
+            ))}
+          </ul>
         )}
-      </div>
-      <h3 className="panel-title">Camera Intelligence</h3>
-      <div className="metrics-grid compact">
-        <article className="metric-tile"><p>Exposure</p><strong>{cameraIntel.exposure || '--'}</strong></article>
-        <article className="metric-tile"><p>Brightness</p><strong>{cameraIntel.brightness ?? '--'}</strong></article>
-        <article className="metric-tile"><p>Sharpness</p><strong>{cameraIntel.sharpness ?? '--'}</strong></article>
-        <article className="metric-tile"><p>Framing</p><strong>{framing.status || '--'}</strong></article>
-      </div>
-    </>
+      </section>
+
+      <section className="live-detail-block">
+        <div className="live-detail-heading">
+          <span>Angles</span>
+          <strong>Real-time body measurements</strong>
+        </div>
+        <div className="metrics-grid compact">
+          {angleEntries.length ? (
+            angleEntries.map((item) => (
+              <article key={item.key} className="metric-tile">
+                <p>{item.label}</p>
+                <strong>{item.value?.toFixed(2)}</strong>
+              </article>
+            ))
+          ) : (
+            <p className="help-text">No angle metrics received yet.</p>
+          )}
+        </div>
+      </section>
+
+      <section className="live-detail-block">
+        <div className="live-detail-heading">
+          <span>Camera Intelligence</span>
+          <strong>Frame quality and capture health</strong>
+        </div>
+        <div className="metrics-grid compact">
+          <article className="metric-tile"><p>Exposure</p><strong>{cameraIntel.exposure || '--'}</strong></article>
+          <article className="metric-tile"><p>Brightness</p><strong>{cameraIntel.brightness ?? '--'}</strong></article>
+          <article className="metric-tile"><p>Sharpness</p><strong>{cameraIntel.sharpness ?? '--'}</strong></article>
+          <article className="metric-tile"><p>Framing</p><strong>{framing.status || '--'}</strong></article>
+        </div>
+      </section>
+    </div>
   );
 
   return (
     <div className="live-workspace">
-      <section className="panel live-startbar">
+      <section className="panel live-startbar live-command-bar">
         <div className="panel-header">
           <div>
-            <h2 className="panel-title">Live Session Controls</h2>
-            <p className="panel-subtitle">Select sport and student, then start live tracking.</p>
+            <h2 className="panel-title">Live Coaching Cockpit</h2>
+            <p className="panel-subtitle">Choose the athlete, launch tracking, and keep every coaching signal visible in one focused training surface.</p>
           </div>
           <div className="panel-actions">
+            <span className="status-badge primary">Status: {liveStatusLabel}</span>
             <span className="status-badge neutral">Pipeline: {live.mode || 'local'}</span>
             {live.paused ? <span className="status-badge danger">Paused</span> : null}
           </div>
@@ -607,14 +633,38 @@ export default function LiveTrainer({
             </button>
           </div>
         </div>
+        <div className="live-command-metrics">
+          <article className="live-command-metric">
+            <span>Session Timer</span>
+            <strong>{elapsedLabel}</strong>
+          </article>
+          <article className="live-command-metric">
+            <span>Session Score</span>
+            <strong>{sessionScore ?? '--'} / 100</strong>
+          </article>
+          <article className="live-command-metric">
+            <span>Tracking</span>
+            <strong>{advanced.tracking_quality ?? '--'}</strong>
+          </article>
+          <article className="live-command-metric">
+            <span>Current Phase</span>
+            <strong>{training.phase || '--'}</strong>
+          </article>
+        </div>
       </section>
 
       <div className="live-top-grid">
-        <section className="panel live-details-panel">
-          <div className="live-details-scroll">{detailsContent}</div>
-        </section>
-
         <section className="panel live-stage-panel">
+          <div className="panel-header live-stage-header">
+            <div>
+              <h2 className="panel-title">Live Stage</h2>
+              <p className="panel-subtitle">Camera feed, skeleton overlay, and fullscreen coaching mode.</p>
+            </div>
+            <div className="panel-actions">
+              <span className="status-badge neutral">Sport: {sport || '--'}</span>
+              <span className="status-badge neutral">Student: {student || '--'}</span>
+            </div>
+          </div>
           <div ref={stageRef} className="video-stage">
             <video ref={videoRef} muted playsInline className="live-video" />
             <canvas ref={overlayRef} className="live-overlay" />
@@ -774,6 +824,16 @@ export default function LiveTrainer({
             ) : null}
           </div>
         </section>
+
+        <section className="panel live-details-panel">
+          <div className="panel-header">
+            <div>
+              <h2 className="panel-title">Coach Intelligence Rail</h2>
+              <p className="panel-subtitle">Corrections, angles, and camera quality stay readable without leaving the stage.</p>
+            </div>
+          </div>
+          <div className="live-details-scroll">{detailsContent}</div>
+        </section>
       </div>
 
       <LiveCoachAssist
@@ -797,8 +857,8 @@ export default function LiveTrainer({
       <section className="panel live-input-panel">
         <div className="panel-header">
           <div>
-            <h2 className="panel-title">Session Metadata & Calibration</h2>
-            <p className="panel-subtitle">Adjust calibration and capture coaching context for save.</p>
+            <h2 className="panel-title">Session Notes & Calibration</h2>
+            <p className="panel-subtitle">Capture coaching context, tune overlay alignment, and control performance behavior before saving.</p>
           </div>
         </div>
 

@@ -1,23 +1,17 @@
-import { useEffect, useState } from 'react';
-
-const STORAGE_KEY = 'archerypt-theme';
-
-function getInitialTheme() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved === 'light' || saved === 'dark') return saved;
-  return 'light';
-}
+import { useCallback } from 'react';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { toggleTheme as toggleThemeAction } from '../store/uiSlice';
 
 export function useTheme() {
-  const [theme, setTheme] = useState(getInitialTheme);
+  const dispatch = useAppDispatch();
+  const theme = useAppSelector((state) => state.ui.theme);
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem(STORAGE_KEY, theme);
-  }, [theme]);
+  const toggleTheme = useCallback(() => {
+    dispatch(toggleThemeAction());
+  }, [dispatch]);
 
   return {
     theme,
-    toggleTheme: () => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark')),
+    toggleTheme,
   };
 }

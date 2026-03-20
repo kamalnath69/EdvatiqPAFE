@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ClipboardList, Edit3, LineChart, Settings2, Users } from 'lucide-react';
+import { Bell, CalendarDays, ClipboardList, Edit3, FileText, Flag, LineChart, Settings2, Shield, Users } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import {
   PieChart,
@@ -25,6 +25,18 @@ import SessionDetailPanel from './SessionDetailPanel';
 import { addStaff, addStudent } from '../services/academiesApi';
 import { assignSport, listStudents, updateStudentAngleMeasurements } from '../services/usersApi';
 import ProfileSection from './ProfileSection';
+import {
+  WorkspaceAuditSection,
+  WorkspaceCalendarSection,
+  WorkspaceCoachReviewSection,
+  WorkspaceFavoritesPanel,
+  WorkspaceHelpSection,
+  WorkspaceInviteSection,
+  WorkspaceNotificationsSection,
+  WorkspaceReportsSection,
+  WorkspaceSettingsSection,
+  WorkspaceTrainingPlansSection,
+} from './WorkspaceModules';
 import { getErrorMessage } from '../services/httpError';
 import { SPORTS } from '../constants/sports';
 import { useToast } from '../hooks/useToast';
@@ -133,13 +145,20 @@ export default function StaffDashboard() {
   const sections = [
     { key: 'overview', label: 'Overview', icon: <LineChart size={16} /> },
     { key: 'live', label: 'Live Coach', icon: <Settings2 size={16} /> },
+    { key: 'reviews', label: 'Coach Review', icon: <Shield size={16} /> },
+    { key: 'plans', label: 'Training Plans', icon: <Flag size={16} /> },
+    { key: 'reports', label: 'Reports', icon: <FileText size={16} /> },
+    { key: 'calendar', label: 'Calendar', icon: <CalendarDays size={16} /> },
+    { key: 'notifications', label: 'Notifications', icon: <Bell size={16} />, sidebarHidden: true },
+    { key: 'invites', label: 'Invites', icon: <Users size={16} /> },
     { key: 'members', label: 'Members', icon: <Users size={16} /> },
     { key: 'angles', label: 'Student Targets', icon: <Settings2 size={16} /> },
     { key: 'assign', label: 'Assign Sport', icon: <Settings2 size={16} /> },
     { key: 'sessions', label: 'Create Session', icon: <Edit3 size={16} /> },
     { key: 'history', label: 'Session History', icon: <ClipboardList size={16} /> },
     { key: 'rules', label: 'Rule Profiles', icon: <Settings2 size={16} /> },
-    { key: 'profile', label: 'Profile', icon: <Users size={16} /> },
+    { key: 'audit', label: 'Audit', icon: <Shield size={16} /> },
+    { key: 'settings', label: 'Settings', icon: <Settings2 size={16} /> },
   ];
 
   const filteredSessions = useMemo(() => {
@@ -416,8 +435,21 @@ export default function StaffDashboard() {
                   </ResponsiveContainer>
                 </div>
               </section>
+              <WorkspaceFavoritesPanel />
             </div>
           ) : null}
+
+          {section === 'reviews' ? <WorkspaceCoachReviewSection students={students} sessions={sessions.data} role="staff" /> : null}
+
+          {section === 'plans' ? <WorkspaceTrainingPlansSection students={students} role="staff" /> : null}
+
+          {section === 'reports' ? <WorkspaceReportsSection students={students} role="staff" /> : null}
+
+          {section === 'calendar' ? <WorkspaceCalendarSection students={students} role="staff" /> : null}
+
+          {section === 'notifications' ? <WorkspaceNotificationsSection /> : null}
+
+          {section === 'invites' ? <WorkspaceInviteSection defaultRole="student" academyId={user?.academy_id || ''} /> : null}
 
           {section === 'sessions' ? (
             <section className="panel enterprise-panel">
@@ -826,7 +858,15 @@ export default function StaffDashboard() {
             </section>
           ) : null}
 
-          {section === 'profile' ? <ProfileSection /> : null}
+          {section === 'audit' ? <WorkspaceAuditSection /> : null}
+
+          {section === 'settings' ? (
+            <div className="panel-grid">
+              <WorkspaceSettingsSection canManageAcademy />
+              <WorkspaceHelpSection />
+              <ProfileSection />
+            </div>
+          ) : null}
         </>
       )}
     </PageShell>

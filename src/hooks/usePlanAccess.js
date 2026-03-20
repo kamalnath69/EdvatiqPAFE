@@ -1,22 +1,23 @@
-import { useContext, useEffect, useMemo } from 'react';
-import { AuthContext } from '../context/auth-context';
-import { listPlans } from '../services/billingApi';
-import { useAsyncState } from './useAsyncState';
+import { useEffect, useMemo } from 'react';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { fetchPlans } from '../store/plansSlice';
 
 export function usePlanAccess() {
-  const { user } = useContext(AuthContext);
-  const plansState = useAsyncState([]);
-  const { data, loading, run } = plansState;
+  const dispatch = useAppDispatch();
+  const user = useAppSelector((state) => state.auth.user);
+  const plans = useAppSelector((state) => state.plans.items);
+  const loading = useAppSelector((state) => state.plans.loading);
+  const loaded = useAppSelector((state) => state.plans.loaded);
 
   useEffect(() => {
-    if (!user) return;
-    run(() => listPlans(), { setPending: false }).catch(() => {});
-  }, [user, run]);
+    if (!user || loaded) return;
+    dispatch(fetchPlans());
+  }, [dispatch, loaded, user]);
 
   const plan = useMemo(() => {
     if (!user) return null;
-    return data.find((p) => p.code === user.plan_code) || null;
-  }, [data, user]);
+    return plans.find((p) => p.code === user.plan_code) || null;
+  }, [plans, user]);
 
   const ai_chat = useMemo(() => {
     if (!user) return false;

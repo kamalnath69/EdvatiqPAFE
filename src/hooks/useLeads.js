@@ -5,13 +5,15 @@ import { listDemoLeads, listSupportLeads } from '../services/leadsApi';
 export function useLeads() {
   const demoState = useAsyncState([]);
   const supportState = useAsyncState([]);
+  const { run: runDemo } = demoState;
+  const { run: runSupport } = supportState;
 
   const refresh = useCallback(async () => {
     await Promise.all([
-      demoState.run(() => listDemoLeads()),
-      supportState.run(() => listSupportLeads()),
+      runDemo(() => listDemoLeads()),
+      runSupport(() => listSupportLeads()),
     ]);
-  }, [demoState, supportState]);
+  }, [runDemo, runSupport]);
 
   useEffect(() => {
     refresh().catch(() => {});
