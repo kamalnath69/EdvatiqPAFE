@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react';
 
-export function useDraftState(storageKey, initialValue) {
+function resolveStorage(storage) {
+  if (typeof window === 'undefined') return null;
+  return storage === 'session' ? window.sessionStorage : window.localStorage;
+}
+
+export function useDraftState(storageKey, initialValue, options = {}) {
+  const storage = options.storage === 'session' ? 'session' : 'local';
   const [value, setValue] = useState(() => {
-    if (typeof window === 'undefined') return initialValue;
-    const raw = window.localStorage.getItem(storageKey);
+    const storageArea = resolveStorage(storage);
+    if (!storageArea) return initialValue;
+    const raw = storageArea.getItem(storageKey);
     if (!raw) return initialValue;
     try {
       return { ...initialValue, ...JSON.parse(raw) };
@@ -13,13 +20,15 @@ export function useDraftState(storageKey, initialValue) {
   });
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(storageKey, JSON.stringify(value));
-  }, [storageKey, value]);
+    const storageArea = resolveStorage(storage);
+    if (!storageArea) return;
+    storageArea.setItem(storageKey, JSON.stringify(value));
+  }, [storage, storageKey, value]);
 
   const clearDraft = () => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(storageKey);
+    const storageArea = resolveStorage(storage);
+    if (storageArea) {
+      storageArea.removeItem(storageKey);
     }
     setValue(initialValue);
   };

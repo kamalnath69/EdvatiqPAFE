@@ -48,6 +48,7 @@ function getProfileImage(user) {
 export default function AiCoachChat({ enabled = true, onWalletChange, onOpenSettings }) {
   const { user } = useAuthUser();
   const [open, setOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [messages, setMessages] = useState(() => [buildIntroMessage(null)]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -124,6 +125,16 @@ export default function AiCoachChat({ enabled = true, onWalletChange, onOpenSett
         speechRecognitionRef.current = null;
       }
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleResize = () => {
+      setIsMobileViewport(window.innerWidth <= 620);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   useEffect(() => {
@@ -263,17 +274,19 @@ export default function AiCoachChat({ enabled = true, onWalletChange, onOpenSett
   }
 
   return (
-    <div className={`ai-coach ${open ? 'open' : ''}`}>
-      <button type="button" className="ai-coach-toggle" onClick={() => setOpen((v) => !v)}>
-        <span className="ai-coach-toggle-icon">
-          <MessageSquare size={18} />
-        </span>
-        <span className="ai-coach-toggle-copy">
-          <strong>AI Coach</strong>
-          <small>Ask for drills and corrections</small>
-        </span>
-        <span className="ai-coach-toggle-pill">{usingPlatformKey ? 'Wallet' : 'Personal'}</span>
-      </button>
+    <div className={`ai-coach ${open ? 'open' : ''} ${isMobileViewport ? 'mobile-page' : ''}`}>
+      {!open ? (
+        <button type="button" className="ai-coach-toggle" onClick={() => setOpen((v) => !v)}>
+          <span className="ai-coach-toggle-icon">
+            <MessageSquare size={18} />
+          </span>
+          <span className="ai-coach-toggle-copy">
+            <strong>AI Coach</strong>
+            <small>Ask for drills and corrections</small>
+          </span>
+          <span className="ai-coach-toggle-pill">{usingPlatformKey ? 'Wallet' : 'Personal'}</span>
+        </button>
+      ) : null}
       {open ? (
         <div className="ai-coach-panel ai-coach-panel-rich ai-coach-panel-pro">
           <div className="ai-coach-header">
@@ -368,7 +381,7 @@ export default function AiCoachChat({ enabled = true, onWalletChange, onOpenSett
                     rows={2}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Ask for immediate corrections, a drill plan, or a short session review..."
+                    placeholder="Ask your coach..."
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -388,9 +401,15 @@ export default function AiCoachChat({ enabled = true, onWalletChange, onOpenSett
                     {voiceListening ? <MicOff size={16} /> : <Mic size={16} />}
                   </button>
                 ) : null}
-                <button type="button" className="primary-button" onClick={() => handleSend()} disabled={loading}>
+                <button
+                  type="button"
+                  className="primary-button ai-send-button"
+                  onClick={() => handleSend()}
+                  disabled={loading}
+                  aria-label="Send message"
+                  title="Send"
+                >
                   <Send size={16} />
-                  Send
                 </button>
               </div>
             </>

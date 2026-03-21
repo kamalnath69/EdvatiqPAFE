@@ -38,7 +38,7 @@ const LOGO_STRIP = [
 ];
 
 const HERO_BADGES = [
-  'No wearables required',
+  'Optional hardware telemetry',
   'Real-time posture scoring',
   'AI coach for every athlete',
   'Organization-ready workflows',
@@ -116,7 +116,7 @@ const TESTIMONIALS = [
 
 const FAQ_CATEGORIES = ['Getting Started', 'Training & Coaching', 'Analytics & Reports', 'Pricing & Plans', 'Security'];
 const FAQS = [
-  { category: 'Getting Started', q: 'Do athletes need wearables or sensors?', a: 'No. Edvatiq runs on camera input with posture intelligence and live scoring.' },
+  { category: 'Getting Started', q: 'Can Edvatiq work with sensors and hardware too?', a: 'Yes. Edvatiq supports camera-first posture tracking and can also incorporate connected hardware telemetry such as temperature and pressure when available.' },
   { category: 'Pricing & Plans', q: 'Can I use Edvatiq for personal training only?', a: 'Yes. Choose a personal plan for solo training or upgrade to organization plans for teams.' },
   { category: 'Training & Coaching', q: 'How does the AI coach help?', a: 'Ask questions about form, corrections, and drills. The AI coach returns immediate guidance.' },
   { category: 'Security', q: 'Is role-based access included?', a: 'Organization plans include academy admin, staff, and student roles out of the box.' },
@@ -125,7 +125,7 @@ const FAQS = [
 
 const TRUST_PILLARS = [
   { title: 'Role-aware access', desc: 'Separate academy admin, staff, and athlete experiences with permissioned workflows built in.', stat: 'RBAC native' },
-  { title: 'Camera-first deployment', desc: 'No wearables, no complex hardware stack, and no extra setup burden for the athlete.', stat: 'Setup in minutes' },
+  { title: 'Camera-first plus hardware', desc: 'Start with camera-based posture tracking and extend sessions with connected hardware telemetry when the academy needs more context.', stat: 'Flexible setup' },
   { title: 'Coach-readable reporting', desc: 'Session scoring, best reps, and review notes are structured so coaches can act immediately.', stat: 'Decision-ready' },
 ];
 

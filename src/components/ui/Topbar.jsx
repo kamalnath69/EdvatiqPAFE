@@ -47,7 +47,6 @@ export default function Topbar({
         >
           <Menu size={18} />
         </button>
-        <div className="topbar-brand-icon">E</div>
         <div className="topbar-brand-copy">
           <p className="topbar-breadcrumb">Workspace / {activeSectionLabel}</p>
           <div className="topbar-title-row">

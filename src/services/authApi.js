@@ -47,3 +47,10 @@ export async function verifySignupEmail(email, code) {
   const resp = await api.post('/auth/verify-signup-email', { email, code });
   return resp.data;
 }
+
+export async function checkSignupAvailability({ username, email }) {
+  const resp = await api.get('/auth/signup-availability', {
+    params: { username, email },
+  });
+  return resp.data;
+}

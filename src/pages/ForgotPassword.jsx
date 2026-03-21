@@ -26,14 +26,28 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="auth-layout">
-      <section className="auth-brand">
+    <div className="auth-layout auth-layout-recovery">
+      <section className="auth-brand auth-brand-recovery">
+        <div className="auth-logo-lockup">
+          <div className="auth-logo-mark">E</div>
+          <div>
+            <p className="auth-logo-kicker">Performance Intelligence</p>
+            <strong>Edvatiq</strong>
+          </div>
+        </div>
         <p className="auth-chip">Account Recovery</p>
         <h1>Reset your Edvatiq password.</h1>
         <p>We will send a secure verification code to your registered email.</p>
       </section>
 
-      <section className="auth-card entrance-rise">
+      <section className="auth-card auth-card-recovery entrance-rise">
+        <div className="auth-card-mini-brand">
+          <div className="auth-logo-mark">E</div>
+          <div>
+            <p className="auth-logo-kicker">Performance Intelligence</p>
+            <strong>Edvatiq</strong>
+          </div>
+        </div>
         <h2>Forgot password</h2>
         <p className="auth-helper">
           Enter your username or email and we will send a reset code.

@@ -45,6 +45,13 @@ export default function Login() {
   return (
     <div className="auth-layout">
       <section className="auth-brand">
+        <div className="auth-logo-lockup">
+          <div className="auth-logo-mark">E</div>
+          <div>
+            <p className="auth-logo-kicker">Performance Intelligence</p>
+            <strong>Edvatiq</strong>
+          </div>
+        </div>
         <p className="auth-chip">Athletic Intelligence</p>
         <h1>Precision posture training for elite progress.</h1>
         <p>
@@ -68,6 +75,13 @@ export default function Login() {
       </section>
 
       <section className="auth-card entrance-rise">
+        <div className="auth-card-mini-brand">
+          <div className="auth-logo-mark">E</div>
+          <div>
+            <p className="auth-logo-kicker">Performance Intelligence</p>
+            <strong>Edvatiq</strong>
+          </div>
+        </div>
         <h2>Welcome back</h2>
         <p className="auth-helper">Sign in to access your training workspace.</p>
 

@@ -11,6 +11,7 @@ import {
   Plus,
   Save,
   Shield,
+  SlidersHorizontal,
   Star,
   Upload,
   Wallet,
@@ -65,6 +66,18 @@ import { startWalletRecharge } from '../services/walletCheckout';
 import { SPORTS } from '../constants/sports';
 import { getCoachConfig, updateCoachConfig } from '../services/chatApi';
 import { buildRechargePresets } from '../utils/wallet';
+import { listSessions, listSessionsForStudent } from '../services/sessionsApi';
+import { exportWorkspaceReportPdf } from '../utils/pdfReports';
+import { store } from '../store';
+import {
+  createHardwareDevice,
+  listHardwareDevices,
+  listHardwareTelemetry,
+  rotateHardwareDeviceToken,
+  updateHardwareDevice,
+} from '../services/hardwareApi';
+import ProfileSection from './ProfileSection';
+import { useAuthUser } from '../hooks/useAuthUser';
 
 function formatDateTime(value) {
   if (!value) return '--';
@@ -74,45 +87,33 @@ function formatDateTime(value) {
 }
 
 async function downloadReportPdf(report) {
-  const [{ jsPDF }] = await Promise.all([import('jspdf')]);
-  const pdf = new jsPDF('p', 'mm', 'a4');
-  const marginX = 16;
-  let y = 18;
-  const lineHeight = 7;
+  const currentUser = store.getState()?.auth?.user;
+  const sessionOwner = report?.student || (report?.scope === 'personal' ? currentUser?.username : '');
+  const sessions = sessionOwner
+    ? await listSessionsForStudent(sessionOwner).catch(() => [])
+    : await listSessions().catch(() => []);
+  await exportWorkspaceReportPdf(report, sessions);
+}
 
-  function writeLine(text, opts = {}) {
-    const { fontSize = 11, weight = 'normal', color = [23, 43, 77] } = opts;
-    pdf.setFont('helvetica', weight);
-    pdf.setFontSize(fontSize);
-    pdf.setTextColor(...color);
-    const lines = pdf.splitTextToSize(String(text || ''), 178);
-    pdf.text(lines, marginX, y);
-    y += lines.length * lineHeight;
-  }
+function shortenText(text, max = 72) {
+  const value = String(text || '').trim();
+  if (!value) return '--';
+  return value.length > max ? `${value.slice(0, max - 1)}...` : value;
+}
 
-  writeLine(report.title || 'Workspace Report', { fontSize: 20, weight: 'bold', color: [17, 24, 39] });
-  writeLine(`Generated ${new Date().toLocaleString()}`, { fontSize: 9, color: [107, 114, 128] });
-  y += 3;
-  writeLine(`Scope: ${report.scope || 'personal'}`);
-  writeLine(`Student: ${report.student || 'Academy-wide'}`);
-  writeLine(`Sport: ${report.sport || '--'}`);
-  writeLine(`Updated: ${formatDateTime(report.updated_at)}`);
-  y += 3;
-  writeLine('Summary', { fontSize: 13, weight: 'bold', color: [37, 99, 235] });
-  writeLine(report.summary || 'No summary was saved for this report.');
-  y += 2;
-  writeLine('Saved Filters', { fontSize: 13, weight: 'bold', color: [37, 99, 235] });
-  writeLine(JSON.stringify(report.filters || {}, null, 2), { fontSize: 9 });
-  y += 2;
-  writeLine('Metrics', { fontSize: 13, weight: 'bold', color: [37, 99, 235] });
-  writeLine(JSON.stringify(report.metrics || {}, null, 2), { fontSize: 9 });
-  y += 2;
-  writeLine('Chart Configuration', { fontSize: 13, weight: 'bold', color: [37, 99, 235] });
-  writeLine(JSON.stringify(report.chart_config || {}, null, 2), { fontSize: 9 });
+function reportScopeChip(value) {
+  const normalized = String(value || '').trim();
+  const tone = normalized === 'academy' ? 'primary' : normalized === 'personal' ? 'success' : 'neutral';
+  return <span className={`table-chip ${tone}`}>{normalized || '--'}</span>;
+}
 
-  const stamp = new Date().toISOString().slice(0, 10);
-  const fileName = `${String(report.title || 'report').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${stamp}.pdf`;
-  pdf.save(fileName);
+function tableStack(primary, secondary = '') {
+  return (
+    <div className="table-stack">
+      <strong className="table-text-strong">{primary || '--'}</strong>
+      {secondary ? <small className="table-text-muted">{secondary}</small> : null}
+    </div>
+  );
 }
 
 function WorkspaceSkeleton({ title = 'Loading workspace data...', embedded = false }) {
@@ -251,6 +252,60 @@ export function WorkspaceNotificationsSection() {
 
 export function WorkspaceSettingsSection({ canManageAcademy = false, canManagePlatform = false }) {
   const { pushToast } = useToast();
+  const { user } = useAuthUser();
+  const settingsSections = useMemo(
+    () =>
+      [
+        {
+          key: 'preferences',
+          label: 'Preferences',
+          description: 'Theme, notifications, and workspace layout.',
+          icon: <SlidersHorizontal size={16} />,
+        },
+        {
+          key: 'ai',
+          label: 'AI Coach',
+          description: 'Coach key source, voice, and wallet controls.',
+          icon: <Wallet size={16} />,
+        },
+        {
+          key: 'hardware',
+          label: 'Hardware',
+          description: 'Register ESP32 devices and stream live telemetry.',
+          icon: <Link2 size={16} />,
+        },
+        {
+          key: 'profile',
+          label: 'Profile',
+          description: 'Personal identity, athlete details, and contact info.',
+          icon: <FileText size={16} />,
+        },
+        {
+          key: 'help',
+          label: 'Help & Docs',
+          description: 'Search guidance, onboarding, and workspace docs.',
+          icon: <HelpCircle size={16} />,
+        },
+        canManagePlatform
+          ? {
+              key: 'platform',
+              label: 'Platform AI',
+              description: 'Default key pricing and admin AI controls.',
+              icon: <KeyRound size={16} />,
+            }
+          : null,
+        canManageAcademy
+          ? {
+              key: 'academy',
+              label: 'Academy',
+              description: 'Branding, reminders, and support defaults.',
+              icon: <Shield size={16} />,
+            }
+          : null,
+      ].filter(Boolean),
+    [canManageAcademy, canManagePlatform]
+  );
+  const [activeSettingsSection, setActiveSettingsSection] = useState('preferences');
   const { data: settingsData, loading: settingsLoading, run: runSettings } = useAsyncState({ user: {}, academy: {} });
   const [coachConfig, setCoachConfig] = useState({
     configured: false,
@@ -302,6 +357,13 @@ export function WorkspaceSettingsSection({ canManageAcademy = false, canManagePl
     () => buildRechargePresets(walletSummary?.suggested_top_up ?? coachConfig.suggested_top_up, 3),
     [walletSummary?.suggested_top_up, coachConfig.suggested_top_up]
   );
+  const latestUsageTransactions = useMemo(
+    () =>
+      walletTransactions
+        .filter((item) => item.type === 'usage' && ['ai_chat', 'live_guidance'].includes(item.source))
+        .slice(0, 10),
+    [walletTransactions]
+  );
 
   const refresh = useCallback(async () => {
     const data = await runSettings(() => getWorkspaceSettings());
@@ -310,7 +372,7 @@ export function WorkspaceSettingsSection({ canManageAcademy = false, canManagePl
     const [nextCoachConfig, nextWalletSummary, nextWalletTransactions, nextPlatformConfig] = await Promise.all([
       getCoachConfig().catch(() => null),
       getWalletSummary().catch(() => null),
-      listWalletTransactions(6).catch(() => []),
+      listWalletTransactions(25).catch(() => []),
       canManagePlatform ? getPlatformAiSettings().catch(() => null) : Promise.resolve(null),
     ]);
     if (nextCoachConfig) setCoachConfig(nextCoachConfig);
@@ -323,6 +385,12 @@ export function WorkspaceSettingsSection({ canManageAcademy = false, canManagePl
   useEffect(() => {
     refresh().catch(() => {});
   }, [refresh]);
+
+  useEffect(() => {
+    if (!settingsSections.some((section) => section.key === activeSettingsSection)) {
+      setActiveSettingsSection(settingsSections[0]?.key || 'preferences');
+    }
+  }, [activeSettingsSection, settingsSections]);
 
   async function saveUserSettings() {
     try {
@@ -406,8 +474,34 @@ export function WorkspaceSettingsSection({ canManageAcademy = false, canManagePl
   if (settingsLoading && !settingsData.user) return <WorkspaceSkeleton title="Loading settings..." />;
 
   return (
-    <div className="panel-grid">
-      <section className="panel">
+    <div className="settings-layout">
+      <aside className="panel settings-sidebar">
+        <div className="settings-sidebar-head">
+          <p className="settings-sidebar-kicker">Workspace settings</p>
+          <h3>Control your setup</h3>
+          <p>Use the left rail to move between account, AI, help, and workspace controls.</p>
+        </div>
+        <nav className="settings-nav" aria-label="Settings sections">
+          {settingsSections.map((section) => (
+            <button
+              key={section.key}
+              type="button"
+              className={`settings-nav-item ${activeSettingsSection === section.key ? 'active' : ''}`}
+              onClick={() => setActiveSettingsSection(section.key)}
+            >
+              <span className="settings-nav-icon">{section.icon}</span>
+              <span className="settings-nav-copy">
+                <strong>{section.label}</strong>
+                <small>{section.description}</small>
+              </span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      <div className="settings-content">
+      {activeSettingsSection === 'preferences' ? (
+      <section className="panel settings-panel">
         <SectionHeader title="Preferences" description="Theme, layout density, quick search, and notification defaults." />
         <div className="form-grid">
           <FormField label="Theme">
@@ -487,8 +581,18 @@ export function WorkspaceSettingsSection({ canManageAcademy = false, canManagePl
           </div>
         </div>
       </section>
+      ) : null}
 
-      <section className="panel">
+      {activeSettingsSection === 'hardware' ? (
+        <WorkspaceHardwareDevicesSection user={user} canManageAcademy={canManageAcademy} canManagePlatform={canManagePlatform} />
+      ) : null}
+
+      {activeSettingsSection === 'profile' ? <ProfileSection /> : null}
+
+      {activeSettingsSection === 'help' ? <WorkspaceHelpSection canManage={canManagePlatform} /> : null}
+
+      {activeSettingsSection === 'ai' ? (
+      <section className="panel settings-panel">
         <SectionHeader title="AI Coach & Wallet" description="Choose between your own API key and the platform key, then manage wallet credits in one place." />
         <div className="form-grid">
           <div className="settings-wallet-hero">
@@ -556,21 +660,20 @@ export function WorkspaceSettingsSection({ canManageAcademy = false, canManagePl
                 ))}
               </div>
               <div className="wallet-transaction-list">
-                {walletTransactions.length ? (
-                  walletTransactions.map((item) => (
+                {latestUsageTransactions.length ? (
+                  latestUsageTransactions.map((item) => (
                     <article key={item.id} className="wallet-transaction-item">
                       <div>
-                        <strong>{item.type === 'usage' ? 'AI usage charge' : 'Wallet top-up'}</strong>
-                        <small>{formatDateTime(item.created_at)}</small>
+                        <strong>{item.source === 'live_guidance' ? 'Live coach guidance' : 'Chat message usage'}</strong>
+                        <small>{item.tokens_used || 0} tokens · {formatDateTime(item.created_at)}</small>
                       </div>
-                      <span className={item.type === 'usage' ? 'wallet-amount negative' : 'wallet-amount positive'}>
-                        {item.type === 'usage' ? '' : '+'}
+                      <span className="wallet-amount negative">
                         {Number(item.credits || 0).toFixed(2)}
                       </span>
                     </article>
                   ))
                 ) : (
-                  <p className="help-text">No wallet transactions yet.</p>
+                  <p className="help-text">No recent AI usage yet. The latest 10 chat and live coach charges will appear here.</p>
                 )}
               </div>
             </>
@@ -606,9 +709,10 @@ export function WorkspaceSettingsSection({ canManageAcademy = false, canManagePl
           </div>
         </div>
       </section>
+      ) : null}
 
-      {canManagePlatform ? (
-        <section className="panel">
+      {canManagePlatform && activeSettingsSection === 'platform' ? (
+        <section className="panel settings-panel">
           <SectionHeader title="Platform AI Controls" description="Admins manage the default AI key, token-to-credit rate, recharge pricing, and suggested top-up from here." />
           <div className="form-grid">
             <div className="settings-wallet-hero">
@@ -679,8 +783,8 @@ export function WorkspaceSettingsSection({ canManageAcademy = false, canManagePl
         </section>
       ) : null}
 
-      {canManageAcademy ? (
-        <section className="panel">
+      {canManageAcademy && activeSettingsSection === 'academy' ? (
+        <section className="panel settings-panel">
           <SectionHeader title="Academy Settings" description="Branding, support contacts, default reminder windows, and review alerts." />
           <div className="form-grid">
             <FormField label="Workspace Name">
@@ -749,6 +853,323 @@ export function WorkspaceSettingsSection({ canManageAcademy = false, canManagePl
           </div>
         </section>
       ) : null}
+      </div>
+    </div>
+  );
+}
+
+function hardwareStatusLabel(device) {
+  const lastSeen = Number(device?.last_seen_at);
+  if (!Number.isFinite(lastSeen)) return 'Not connected';
+  const ageSeconds = Math.max(0, Math.round(Date.now() / 1000 - lastSeen));
+  if (ageSeconds <= 15) return 'Online';
+  if (ageSeconds <= 120) return 'Recently seen';
+  return 'Offline';
+}
+
+function hardwareStatusTone(device) {
+  const label = hardwareStatusLabel(device);
+  if (label === 'Online') return 'success';
+  if (label === 'Recently seen') return 'warning';
+  return 'neutral';
+}
+
+function hardwarePreviewJson(device) {
+  return JSON.stringify(
+    {
+      source: 'esp32',
+      temperature_c: 27.4,
+      pressure_kpa: 101.3,
+      humidity_pct: 61,
+      battery_pct: 88,
+      metadata: {
+        firmware_version: device?.firmware_version || 'v1.0.0',
+      },
+    },
+    null,
+    2
+  );
+}
+
+export function WorkspaceHardwareDevicesSection({ user, canManageAcademy = false, canManagePlatform = false }) {
+  const { pushToast } = useToast();
+  const isStudent = String(user?.role || '').toLowerCase() === 'student';
+  const canManageDevices = Boolean(user);
+  const fetchDevices = useCallback(
+    () => listHardwareDevices(isStudent ? user?.username || '' : ''),
+    [isStudent, user?.username]
+  );
+  const devices = useWorkspaceCollection(fetchDevices, [isStudent, user?.username]);
+  const [draft, setDraft, clearDraft] = useDraftState(`workspace.hardware.${user?.role || 'user'}`, {
+    name: '',
+    student: '',
+    device_type: 'esp32-bme280',
+    sampling_interval_ms: 500,
+    firmware_version: 'v1.0.0',
+    notes: '',
+  });
+  const [provisionedDevice, setProvisionedDevice] = useState(null);
+  const [selectedDeviceId, setSelectedDeviceId] = useState('');
+  const [deviceTelemetry, setDeviceTelemetry] = useState([]);
+  const [deviceTelemetryLoading, setDeviceTelemetryLoading] = useState(false);
+  const [busyDeviceId, setBusyDeviceId] = useState('');
+
+  useEffect(() => {
+    const activeDeviceId = selectedDeviceId || devices.data[0]?.id || '';
+    if (!activeDeviceId) {
+      setDeviceTelemetry([]);
+      return undefined;
+    }
+    setSelectedDeviceId(activeDeviceId);
+
+    let active = true;
+    let timerId;
+
+    const loadTelemetry = async () => {
+      setDeviceTelemetryLoading(true);
+      try {
+        const next = await listHardwareTelemetry(activeDeviceId, 10);
+        if (!active) return;
+        setDeviceTelemetry(next);
+      } catch {
+        if (!active) return;
+        setDeviceTelemetry([]);
+      } finally {
+        if (active) setDeviceTelemetryLoading(false);
+      }
+    };
+
+    loadTelemetry();
+    timerId = window.setInterval(loadTelemetry, 6000);
+
+    return () => {
+      active = false;
+      window.clearInterval(timerId);
+    };
+  }, [devices.data, selectedDeviceId]);
+
+  async function handleCreateDevice() {
+    if (!canManageDevices) return;
+    try {
+      const created = await createHardwareDevice({
+        name: draft.name,
+        student: isStudent ? user?.username : draft.student,
+        device_type: draft.device_type,
+        sampling_interval_ms: Number(draft.sampling_interval_ms || 500),
+        firmware_version: draft.firmware_version || undefined,
+        notes: draft.notes || undefined,
+      });
+      setProvisionedDevice(created);
+      clearDraft();
+      await devices.refresh();
+      setSelectedDeviceId(created.id);
+      pushToast({ type: 'success', message: 'Hardware device registered. Copy the token into your ESP32 firmware.' });
+    } catch {
+      pushToast({ type: 'error', message: 'Unable to register hardware device.' });
+    }
+  }
+
+  async function handleRotateToken(deviceId) {
+    try {
+      setBusyDeviceId(deviceId);
+      const rotated = await rotateHardwareDeviceToken(deviceId);
+      setProvisionedDevice(rotated);
+      await devices.refresh();
+      pushToast({ type: 'success', message: 'Device token rotated. Update the ESP32 firmware with the new token.' });
+    } catch {
+      pushToast({ type: 'error', message: 'Unable to rotate device token.' });
+    } finally {
+      setBusyDeviceId('');
+    }
+  }
+
+  async function handleToggleDevice(device) {
+    try {
+      setBusyDeviceId(device.id);
+      await updateHardwareDevice(device.id, { active: !device.active });
+      await devices.refresh();
+      pushToast({ type: 'success', message: device.active ? 'Device disabled.' : 'Device re-enabled.' });
+    } catch {
+      pushToast({ type: 'error', message: 'Unable to update device state.' });
+    } finally {
+      setBusyDeviceId('');
+    }
+  }
+
+  return (
+    <div className="panel-grid">
+      <section className="panel settings-panel">
+        <SectionHeader title="Hardware Devices" description="Pair ESP32 hardware to a student, then send live temperature and pressure telemetry into the coaching wall." />
+        <div className="form-grid">
+          <FormField label="Device Name">
+            <input value={draft.name} onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Range bay sensor 01" />
+          </FormField>
+          {!isStudent ? (
+            <FormField label="Assigned Student">
+              <input value={draft.student} onChange={(event) => setDraft((prev) => ({ ...prev, student: event.target.value }))} placeholder="student username" />
+            </FormField>
+          ) : (
+            <FormField label="Assigned Student">
+              <input value={user?.username || ''} disabled />
+            </FormField>
+          )}
+          <FormField label="Hardware Type">
+            <select value={draft.device_type} onChange={(event) => setDraft((prev) => ({ ...prev, device_type: event.target.value }))}>
+              <option value="esp32-bme280">ESP32 + BME280</option>
+              <option value="esp32-bmp280">ESP32 + BMP280</option>
+            </select>
+          </FormField>
+          <FormField label="Sampling Interval (ms)">
+            <input type="number" min="100" step="100" value={draft.sampling_interval_ms} onChange={(event) => setDraft((prev) => ({ ...prev, sampling_interval_ms: event.target.value }))} />
+          </FormField>
+          <FormField label="Firmware Version">
+            <input value={draft.firmware_version} onChange={(event) => setDraft((prev) => ({ ...prev, firmware_version: event.target.value }))} placeholder="v1.0.0" />
+          </FormField>
+          <FormField label="Notes">
+            <input value={draft.notes} onChange={(event) => setDraft((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Mounted behind training wall" />
+          </FormField>
+          <div className="sticky-action-row">
+            <button type="button" className="primary-button" onClick={handleCreateDevice}>
+              <Plus size={16} /> Register Device
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {provisionedDevice ? (
+        <section className="panel settings-panel">
+          <SectionHeader title="ESP32 Provisioning" description="This token is shown only when a device is created or rotated. Copy it into the firmware before flashing." badge={provisionedDevice.name} />
+          <div className="detail-token-grid">
+            <div className="detail-token">
+              <span>Device ID</span>
+              <strong>{provisionedDevice.id}</strong>
+            </div>
+            <div className="detail-token">
+              <span>Assigned student</span>
+              <strong>{provisionedDevice.student || '--'}</strong>
+            </div>
+            <div className="detail-token">
+              <span>HTTP endpoint</span>
+              <strong>/hardware/ingest</strong>
+            </div>
+          </div>
+          <FormField label="Device Token">
+            <textarea rows={3} readOnly value={provisionedDevice.device_token || ''} />
+          </FormField>
+          <FormField label="Payload Example">
+            <textarea rows={8} readOnly value={hardwarePreviewJson(provisionedDevice)} />
+          </FormField>
+        </section>
+      ) : null}
+
+      <section className="panel settings-panel">
+        <SectionHeader title="Registered Devices" description="Monitor health, assignment, and the latest environmental readings for each connected unit." badge={`${devices.data.length} devices`} />
+        {devices.loading && !devices.data.length ? <WorkspaceSkeleton title="Loading devices..." embedded /> : null}
+        {!devices.loading && !devices.data.length ? (
+          <EmptyState title="No hardware devices yet" description="Register an ESP32 device here, flash the token into firmware, and it will start feeding live telemetry into the app." />
+        ) : !devices.loading ? (
+          <DataTable
+            rows={devices.data}
+            rowKey={(row) => row.id}
+            columns={[
+              {
+                key: 'device',
+                label: 'Device',
+                render: (row) => tableStack(row.name, `${row.device_type || 'hardware'} · ${row.transport || 'wifi-http'}`),
+              },
+              {
+                key: 'student',
+                label: 'Student',
+                render: (row) => <span className="table-text-strong">{row.student || '--'}</span>,
+              },
+              {
+                key: 'status',
+                label: 'Status',
+                render: (row) => <span className={`table-chip ${hardwareStatusTone(row)}`}>{hardwareStatusLabel(row)}</span>,
+              },
+              {
+                key: 'latest_temperature_c',
+                label: 'Temp',
+                render: (row) => <span className="table-text-muted">{row.latest_temperature_c != null ? `${Number(row.latest_temperature_c).toFixed(1)} C` : '--'}</span>,
+              },
+              {
+                key: 'latest_pressure_kpa',
+                label: 'Pressure',
+                render: (row) => <span className="table-text-muted">{row.latest_pressure_kpa != null ? `${Number(row.latest_pressure_kpa).toFixed(1)} kPa` : '--'}</span>,
+              },
+              {
+                key: 'last_seen_at',
+                label: 'Last Seen',
+                render: (row) => <span className="table-text-muted">{formatDateTime(row.last_seen_at)}</span>,
+              },
+              {
+                key: 'actions',
+                label: 'Actions',
+                sortable: false,
+                searchable: false,
+                render: (row) => (
+                  <div className="table-inline-actions">
+                    <button type="button" className="ghost-button" onClick={() => setSelectedDeviceId(row.id)}>
+                      View Feed
+                    </button>
+                    <button type="button" className="ghost-button" onClick={() => handleRotateToken(row.id)} disabled={busyDeviceId === row.id}>
+                      Rotate Token
+                    </button>
+                    <button type="button" className="ghost-button" onClick={() => handleToggleDevice(row)} disabled={busyDeviceId === row.id}>
+                      {row.active ? 'Disable' : 'Enable'}
+                    </button>
+                  </div>
+                ),
+              },
+            ]}
+          />
+        ) : null}
+      </section>
+
+      <section className="panel settings-panel">
+        <SectionHeader title="Latest Device Feed" description="Latest 10 readings from the selected device. This is the stream the live coach page consumes." />
+        {deviceTelemetryLoading && !deviceTelemetry.length ? <WorkspaceSkeleton title="Loading telemetry..." embedded /> : null}
+        {!deviceTelemetryLoading && !deviceTelemetry.length ? (
+          <EmptyState title="No telemetry yet" description="Once the ESP32 starts posting to /hardware/ingest with its device token, readings will appear here." />
+        ) : !deviceTelemetryLoading ? (
+          <DataTable
+            rows={deviceTelemetry}
+            rowKey={(row) => row.id}
+            columns={[
+              {
+                key: 'captured_at',
+                label: 'Captured',
+                render: (row) => <span className="table-text-muted">{formatDateTime(row.captured_at || row.updated_at)}</span>,
+              },
+              {
+                key: 'temperature_c',
+                label: 'Temperature',
+                render: (row) => <span className="table-chip info">{row.temperature_c != null ? `${Number(row.temperature_c).toFixed(1)} C` : '--'}</span>,
+              },
+              {
+                key: 'pressure_kpa',
+                label: 'Pressure',
+                render: (row) => <span className="table-chip primary">{row.pressure_kpa != null ? `${Number(row.pressure_kpa).toFixed(1)} kPa` : '--'}</span>,
+              },
+              {
+                key: 'humidity_pct',
+                label: 'Humidity',
+                render: (row) => <span className="table-text-muted">{row.humidity_pct != null ? `${Number(row.humidity_pct).toFixed(0)} %` : '--'}</span>,
+              },
+              {
+                key: 'battery_pct',
+                label: 'Battery',
+                render: (row) => <span className="table-text-muted">{row.battery_pct != null ? `${Number(row.battery_pct).toFixed(0)} %` : '--'}</span>,
+              },
+              {
+                key: 'source',
+                label: 'Source',
+                render: (row) => <span className="table-text-muted">{row.source || '--'}</span>,
+              },
+            ]}
+          />
+        ) : null}
+      </section>
     </div>
   );
 }
@@ -902,14 +1323,42 @@ export function WorkspaceReportsSection({ students = [], role = 'student' }) {
         emptyText="No reports saved yet."
         searchPlaceholder="Search reports"
         columns={[
-          { key: 'title', label: 'Title' },
-          { key: 'student', label: 'Student', render: (row) => row.student || 'Academy' },
-          { key: 'sport', label: 'Sport', render: (row) => row.sport || '--' },
-          { key: 'scope', label: 'Scope' },
-          { key: 'updated_at', label: 'Updated', render: (row) => formatDateTime(row.updated_at) },
+          {
+            key: 'title',
+            label: 'Title',
+            render: (row) => tableStack(row.title, row.summary ? shortenText(row.summary, 54) : ''),
+          },
+          {
+            key: 'student',
+            label: 'Student',
+            render: (row) => tableStack(row.student || 'Academy', row.metrics?.audience || ''),
+          },
+          { key: 'sport', label: 'Sport', render: (row) => <span className="table-chip neutral">{row.sport || '--'}</span> },
+          { key: 'scope', label: 'Scope', render: (row) => reportScopeChip(row.scope) },
+          {
+            key: 'window',
+            label: 'Window',
+            render: (row) => <span className="table-chip neutral">{row.filters?.time_window || row.chart_config?.time_window || '--'}</span>,
+            sortValue: (row) => row.filters?.time_window || row.chart_config?.time_window || '',
+          },
+          {
+            key: 'audience',
+            label: 'Audience',
+            render: (row) => <span className="table-chip neutral">{row.metrics?.audience || '--'}</span>,
+            sortValue: (row) => row.metrics?.audience || '',
+          },
+          {
+            key: 'summary',
+            label: 'Summary',
+            render: (row) => tableStack(shortenText(row.summary || row.metrics?.highlights || row.metrics?.recommendation), row.metrics?.recommendation ? shortenText(row.metrics.recommendation, 54) : ''),
+            sortValue: (row) => row.summary || row.metrics?.highlights || row.metrics?.recommendation || '',
+          },
+          { key: 'updated_at', label: 'Updated', render: (row) => <span className="table-text-muted">{formatDateTime(row.updated_at)}</span> },
           {
             key: 'actions',
             label: 'Actions',
+            sortable: false,
+            searchable: false,
             render: (row) => (
               <div className="table-inline-actions">
                 <button type="button" className="ghost-button" onClick={() => handleShare(row.id)}>
@@ -929,6 +1378,7 @@ export function WorkspaceReportsSection({ students = [], role = 'student' }) {
 
 export function WorkspaceTrainingPlansSection({ students = [], role = 'student' }) {
   const { pushToast } = useToast();
+  const { user } = useAuthUser();
   const fetchPlans = useCallback(() => listTrainingPlans(), []);
   const plans = useWorkspaceCollection(fetchPlans);
   const [draft, setDraft, clearDraft] = useDraftState(`workspace.plans.${role}`, {
@@ -943,9 +1393,10 @@ export function WorkspaceTrainingPlansSection({ students = [], role = 'student' 
 
   async function handleCreate() {
     try {
+      const targetStudent = role === 'student' ? user?.username : draft.student || students[0]?.username;
       await createTrainingPlan({
         title: draft.title,
-        student: draft.student || students[0]?.username,
+        student: targetStudent,
         sport: draft.sport,
         summary: draft.summary,
         weekly_focus: draft.weekly_focus.split(',').map((item) => item.trim()).filter(Boolean),
@@ -974,13 +1425,20 @@ export function WorkspaceTrainingPlansSection({ students = [], role = 'student' 
 
   return (
     <div className="panel-grid">
-      {role !== 'student' ? (
-        <section className="panel">
-          <SectionHeader title="Training Plans & Goals" description="Assign weekly focus, target metrics, and drills with draft autosave." />
-          <div className="form-grid">
-            <FormField label="Plan Title">
-              <input value={draft.title} onChange={(event) => setDraft((prev) => ({ ...prev, title: event.target.value }))} placeholder="Week 12 form stability block" />
-            </FormField>
+      <section className="panel">
+        <SectionHeader
+          title={role === 'student' ? 'My Goals & Plans' : 'Training Plans & Goals'}
+          description={
+            role === 'student'
+              ? 'Create your own personal training blocks, weekly focus items, and self-directed goals.'
+              : 'Assign weekly focus, target metrics, and drills with draft autosave.'
+          }
+        />
+        <div className="form-grid">
+          <FormField label="Plan Title">
+            <input value={draft.title} onChange={(event) => setDraft((prev) => ({ ...prev, title: event.target.value }))} placeholder="Week 12 form stability block" />
+          </FormField>
+          {role !== 'student' ? (
             <FormField label="Student">
               <select value={draft.student} onChange={(event) => setDraft((prev) => ({ ...prev, student: event.target.value }))}>
                 <option value="">Select student</option>
@@ -991,35 +1449,44 @@ export function WorkspaceTrainingPlansSection({ students = [], role = 'student' 
                 ))}
               </select>
             </FormField>
-            <FormField label="Sport">
-              <select value={draft.sport} onChange={(event) => setDraft((prev) => ({ ...prev, sport: event.target.value }))}>
-                {SPORTS.map((sport) => (
-                  <option key={sport} value={sport}>
-                    {sport}
-                  </option>
-                ))}
-              </select>
+          ) : (
+            <FormField label="Owner">
+              <input value={user?.username || 'Current athlete'} readOnly />
             </FormField>
-            <FormField label="Weekly Focus (comma separated)">
-              <input value={draft.weekly_focus} onChange={(event) => setDraft((prev) => ({ ...prev, weekly_focus: event.target.value }))} placeholder="anchor, release, spine angle" />
-            </FormField>
-            <FormField label="Summary">
-              <textarea rows={4} value={draft.summary} onChange={(event) => setDraft((prev) => ({ ...prev, summary: event.target.value }))} />
-            </FormField>
-            <FormField label="Coach Comments">
-              <textarea rows={3} value={draft.coach_comments} onChange={(event) => setDraft((prev) => ({ ...prev, coach_comments: event.target.value }))} />
-            </FormField>
-            <FormField label="Due Date">
-              <input type="date" value={draft.due_date} onChange={(event) => setDraft((prev) => ({ ...prev, due_date: event.target.value }))} />
-            </FormField>
-            <div className="sticky-action-row">
-              <button type="button" className="primary-button" onClick={handleCreate} disabled={!draft.title.trim() || !draft.student}>
-                <Flag size={16} /> Save Training Plan
-              </button>
-            </div>
+          )}
+          <FormField label="Sport">
+            <select value={draft.sport} onChange={(event) => setDraft((prev) => ({ ...prev, sport: event.target.value }))}>
+              {SPORTS.map((sport) => (
+                <option key={sport} value={sport}>
+                  {sport}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Weekly Focus (comma separated)">
+            <input value={draft.weekly_focus} onChange={(event) => setDraft((prev) => ({ ...prev, weekly_focus: event.target.value }))} placeholder="anchor, release, spine angle" />
+          </FormField>
+          <FormField label="Summary">
+            <textarea rows={4} value={draft.summary} onChange={(event) => setDraft((prev) => ({ ...prev, summary: event.target.value }))} />
+          </FormField>
+          <FormField label={role === 'student' ? 'Personal Notes' : 'Coach Comments'}>
+            <textarea rows={3} value={draft.coach_comments} onChange={(event) => setDraft((prev) => ({ ...prev, coach_comments: event.target.value }))} />
+          </FormField>
+          <FormField label="Due Date">
+            <input type="date" value={draft.due_date} onChange={(event) => setDraft((prev) => ({ ...prev, due_date: event.target.value }))} />
+          </FormField>
+          <div className="sticky-action-row">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={handleCreate}
+              disabled={!draft.title.trim() || (role !== 'student' && !draft.student)}
+            >
+              <Flag size={16} /> {role === 'student' ? 'Save My Plan' : 'Save Training Plan'}
+            </button>
           </div>
-        </section>
-      ) : null}
+        </div>
+      </section>
 
       <section className="panel">
         <SectionHeader title="Active Goals" description="Monitor weekly targets, completion status, and assigned drills." badge={`${plans.data.filter((item) => item.status !== 'completed').length} active`} />
@@ -1265,6 +1732,7 @@ export function WorkspaceCoachReviewSection({ students = [], sessions = [], role
 
 export function WorkspaceCalendarSection({ students = [], role = 'student' }) {
   const { pushToast } = useToast();
+  const { user } = useAuthUser();
   const fetchEvents = useCallback(() => listCalendarEvents(), []);
   const events = useWorkspaceCollection(fetchEvents);
   const [draft, setDraft, clearDraft] = useDraftState(`workspace.calendar.${role}`, {
@@ -1279,15 +1747,16 @@ export function WorkspaceCalendarSection({ students = [], role = 'student' }) {
 
   async function handleCreateEvent() {
     try {
+      const targetStudent = role === 'student' ? user?.username : draft.student || undefined;
       await createCalendarEvent({
         title: draft.title,
-        student: draft.student || undefined,
+        student: targetStudent,
         event_type: draft.event_type,
         start_at: new Date(draft.start_at).getTime() / 1000,
         end_at: new Date(draft.end_at).getTime() / 1000,
         description: draft.description,
         location: draft.location,
-        attendees: draft.student ? [draft.student] : [],
+        attendees: targetStudent ? [targetStudent] : [],
         status: 'scheduled',
       });
       clearDraft();
@@ -1300,13 +1769,20 @@ export function WorkspaceCalendarSection({ students = [], role = 'student' }) {
 
   return (
     <div className="panel-grid">
-      {role !== 'student' ? (
-        <section className="panel">
-          <SectionHeader title="Calendar & Schedule" description="Track upcoming sessions, academy blocks, demo bookings, and reminders." />
-          <div className="form-grid">
-            <FormField label="Title">
-              <input value={draft.title} onChange={(event) => setDraft((prev) => ({ ...prev, title: event.target.value }))} placeholder="High-volume release clinic" />
-            </FormField>
+      <section className="panel">
+        <SectionHeader
+          title={role === 'student' ? 'My Schedule' : 'Calendar & Schedule'}
+          description={
+            role === 'student'
+              ? 'Create your own training reminders, review slots, and personal calendar items.'
+              : 'Track upcoming sessions, academy blocks, demo bookings, and reminders.'
+          }
+        />
+        <div className="form-grid">
+          <FormField label="Title">
+            <input value={draft.title} onChange={(event) => setDraft((prev) => ({ ...prev, title: event.target.value }))} placeholder="High-volume release clinic" />
+          </FormField>
+          {role !== 'student' ? (
             <FormField label="Student">
               <select value={draft.student} onChange={(event) => setDraft((prev) => ({ ...prev, student: event.target.value }))}>
                 <option value="">Academy / team event</option>
@@ -1317,34 +1793,38 @@ export function WorkspaceCalendarSection({ students = [], role = 'student' }) {
                 ))}
               </select>
             </FormField>
-            <FormField label="Event Type">
-              <select value={draft.event_type} onChange={(event) => setDraft((prev) => ({ ...prev, event_type: event.target.value }))}>
-                <option value="training">Training</option>
-                <option value="review">Coach review</option>
-                <option value="demo">Booked demo</option>
-                <option value="reminder">Reminder</option>
-              </select>
+          ) : (
+            <FormField label="Owner">
+              <input value={user?.username || 'Current athlete'} readOnly />
             </FormField>
-            <FormField label="Start">
-              <input type="datetime-local" value={draft.start_at} onChange={(event) => setDraft((prev) => ({ ...prev, start_at: event.target.value }))} />
-            </FormField>
-            <FormField label="End">
-              <input type="datetime-local" value={draft.end_at} onChange={(event) => setDraft((prev) => ({ ...prev, end_at: event.target.value }))} />
-            </FormField>
-            <FormField label="Location">
-              <input value={draft.location} onChange={(event) => setDraft((prev) => ({ ...prev, location: event.target.value }))} placeholder="Range A / Virtual" />
-            </FormField>
-            <FormField label="Description">
-              <textarea rows={3} value={draft.description} onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))} />
-            </FormField>
-            <div className="sticky-action-row">
-              <button type="button" className="primary-button" onClick={handleCreateEvent} disabled={!draft.title || !draft.start_at || !draft.end_at}>
-                <CalendarDays size={16} /> Save Event
-              </button>
-            </div>
+          )}
+          <FormField label="Event Type">
+            <select value={draft.event_type} onChange={(event) => setDraft((prev) => ({ ...prev, event_type: event.target.value }))}>
+              <option value="training">Training</option>
+              <option value="review">Coach review</option>
+              <option value="demo">Booked demo</option>
+              <option value="reminder">Reminder</option>
+            </select>
+          </FormField>
+          <FormField label="Start">
+            <input type="datetime-local" value={draft.start_at} onChange={(event) => setDraft((prev) => ({ ...prev, start_at: event.target.value }))} />
+          </FormField>
+          <FormField label="End">
+            <input type="datetime-local" value={draft.end_at} onChange={(event) => setDraft((prev) => ({ ...prev, end_at: event.target.value }))} />
+          </FormField>
+          <FormField label="Location">
+            <input value={draft.location} onChange={(event) => setDraft((prev) => ({ ...prev, location: event.target.value }))} placeholder="Range A / Virtual" />
+          </FormField>
+          <FormField label="Description">
+            <textarea rows={3} value={draft.description} onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))} />
+          </FormField>
+          <div className="sticky-action-row">
+            <button type="button" className="primary-button" onClick={handleCreateEvent} disabled={!draft.title || !draft.start_at || !draft.end_at}>
+              <CalendarDays size={16} /> {role === 'student' ? 'Save Reminder' : 'Save Event'}
+            </button>
           </div>
-        </section>
-      ) : null}
+        </div>
+      </section>
 
       <DataTable
         title="Schedule"

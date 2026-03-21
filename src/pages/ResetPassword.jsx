@@ -35,12 +35,26 @@ export default function ResetPassword() {
   return (
     <div className="auth-layout">
       <section className="auth-brand">
+        <div className="auth-logo-lockup">
+          <div className="auth-logo-mark">E</div>
+          <div>
+            <p className="auth-logo-kicker">Performance Intelligence</p>
+            <strong>Edvatiq</strong>
+          </div>
+        </div>
         <p className="auth-chip">Password Reset</p>
         <h1>Create a new password securely.</h1>
         <p>Use the verification code from your email to complete the reset.</p>
       </section>
 
       <section className="auth-card entrance-rise">
+        <div className="auth-card-mini-brand">
+          <div className="auth-logo-mark">E</div>
+          <div>
+            <p className="auth-logo-kicker">Performance Intelligence</p>
+            <strong>Edvatiq</strong>
+          </div>
+        </div>
         <h2>Reset password</h2>
         <p className="auth-helper">Enter the verification code and your new password.</p>
 

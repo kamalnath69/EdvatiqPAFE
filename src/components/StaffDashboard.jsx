@@ -24,13 +24,11 @@ import LiveTrainer from './LiveTrainer';
 import SessionDetailPanel from './SessionDetailPanel';
 import { addStaff, addStudent } from '../services/academiesApi';
 import { assignSport, listStudents, updateStudentAngleMeasurements } from '../services/usersApi';
-import ProfileSection from './ProfileSection';
 import {
   WorkspaceAuditSection,
   WorkspaceCalendarSection,
   WorkspaceCoachReviewSection,
   WorkspaceFavoritesPanel,
-  WorkspaceHelpSection,
   WorkspaceInviteSection,
   WorkspaceNotificationsSection,
   WorkspaceReportsSection,
@@ -81,6 +79,40 @@ function shorten(text, max = 72) {
   const raw = String(text || '').trim();
   if (!raw) return '--';
   return raw.length > max ? `${raw.slice(0, max - 1)}...` : raw;
+}
+
+function renderScoreChip(value) {
+  const numeric = Number(value);
+  const tone = !Number.isFinite(numeric)
+    ? 'neutral'
+    : numeric >= 80
+      ? 'success'
+      : numeric >= 60
+        ? 'primary'
+        : 'warning';
+  return <span className={`table-chip ${tone}`}>{Number.isFinite(numeric) ? numeric.toFixed(0) : '--'}</span>;
+}
+
+function renderTrackingChip(value) {
+  const normalized = String(value || '').trim();
+  const tone =
+    normalized.toLowerCase() === 'high'
+      ? 'success'
+      : normalized.toLowerCase() === 'medium'
+        ? 'primary'
+        : normalized
+          ? 'warning'
+          : 'neutral';
+  return <span className={`table-chip ${tone}`}>{normalized || '--'}</span>;
+}
+
+function renderTableStack(primary, secondary = '') {
+  return (
+    <div className="table-stack">
+      <strong className="table-text-strong">{primary || '--'}</strong>
+      {secondary ? <small className="table-text-muted">{secondary}</small> : null}
+    </div>
+  );
 }
 
 function toFeedbackArray(raw) {
@@ -657,34 +689,38 @@ export default function StaffDashboard() {
                       {
                         key: 'started_at',
                         label: 'Session Time',
-                        render: (row) => formatSessionDate(row),
+                        render: (row) =>
+                          renderTableStack(
+                            formatSessionDate(row),
+                            row.duration_minutes ? `${row.duration_minutes} min` : ''
+                          ),
                       },
-                      { key: 'student', label: 'Student' },
-                      { key: 'sport', label: 'Sport' },
+                      { key: 'student', label: 'Student', render: (row) => renderTableStack(row.student, row.created_by ? `Coach ${row.created_by}` : '') },
+                      { key: 'sport', label: 'Sport', render: (row) => <span className="table-chip neutral">{row.sport || '--'}</span> },
                       {
                         key: 'session_score',
                         label: 'Score',
-                        render: (row) => row.session_score ?? '--',
+                        render: (row) => renderScoreChip(row.session_score),
                       },
                       {
                         key: 'rep_summary',
                         label: 'Reps',
-                        render: (row) => row.rep_summary?.total_reps ?? '--',
+                        render: (row) => <span className="table-chip neutral">{row.rep_summary?.total_reps ?? '--'} reps</span>,
                       },
                       {
                         key: 'duration',
                         label: 'Duration',
-                        render: (row) => (row.duration_minutes ? `${row.duration_minutes} min` : '--'),
+                        render: (row) => <span className="table-chip neutral">{row.duration_minutes ? `${row.duration_minutes} min` : '--'}</span>,
                       },
                       {
                         key: 'tracking',
                         label: 'Tracking',
-                        render: (row) => row?.camera_summary?.tracking_quality || '--',
+                        render: (row) => renderTrackingChip(row?.camera_summary?.tracking_quality),
                       },
                       {
                         key: 'summary',
-                        label: 'Summary',
-                        render: (row) => shorten(row.custom_note || row.drill_focus || row.feedback?.[0]),
+                        label: 'Session Note',
+                        render: (row) => renderTableStack(shorten(row.custom_note || row.drill_focus), row.drill_focus && row.custom_note ? row.drill_focus : ''),
                       },
                     ]}
                   />
@@ -861,11 +897,7 @@ export default function StaffDashboard() {
           {section === 'audit' ? <WorkspaceAuditSection /> : null}
 
           {section === 'settings' ? (
-            <div className="panel-grid">
-              <WorkspaceSettingsSection canManageAcademy />
-              <WorkspaceHelpSection />
-              <ProfileSection />
-            </div>
+            <WorkspaceSettingsSection canManageAcademy />
           ) : null}
         </>
       )}

@@ -12,7 +12,6 @@ import { useAcademies } from '../hooks/useAcademies';
 import { useUsers } from '../hooks/useUsers';
 import { useSessions } from '../hooks/useSessions';
 import { useLeads } from '../hooks/useLeads';
-import ProfileSection from './ProfileSection';
 import PolicyManager from './PolicyManager';
 import PlanManager from './PlanManager';
 import {
@@ -20,7 +19,6 @@ import {
   WorkspaceBillingSection,
   WorkspaceCalendarSection,
   WorkspaceFavoritesPanel,
-  WorkspaceHelpSection,
   WorkspaceInviteSection,
   WorkspaceNotificationsSection,
   WorkspaceReportsSection,
@@ -38,6 +36,47 @@ function AdminKpis({ academies, users, sessions }) {
       <StatCard label="Users" value={users.length} hint="Across all roles" icon={<Users />} />
       <StatCard label="Sessions" value={sessions.length} hint="Posture logs" icon={<Activity />} />
       <StatCard label="Staff + Admins" value={users.filter((u) => u.role !== 'student').length} icon={<ShieldCheck />} />
+    </div>
+  );
+}
+
+function formatSessionDate(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '--';
+  const timestamp = numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+  return new Date(timestamp).toLocaleString();
+}
+
+function renderScoreChip(value) {
+  const numeric = Number(value);
+  const tone = !Number.isFinite(numeric)
+    ? 'neutral'
+    : numeric >= 80
+      ? 'success'
+      : numeric >= 60
+        ? 'primary'
+        : 'warning';
+  return <span className={`table-chip ${tone}`}>{Number.isFinite(numeric) ? numeric.toFixed(0) : '--'}</span>;
+}
+
+function renderTrackingChip(value) {
+  const normalized = String(value || '').trim();
+  const tone =
+    normalized.toLowerCase() === 'high'
+      ? 'success'
+      : normalized.toLowerCase() === 'medium'
+        ? 'primary'
+        : normalized
+          ? 'warning'
+          : 'neutral';
+  return <span className={`table-chip ${tone}`}>{normalized || '--'}</span>;
+}
+
+function renderStack(primary, secondary = '') {
+  return (
+    <div className="table-stack">
+      <strong className="table-text-strong">{primary || '--'}</strong>
+      {secondary ? <small className="table-text-muted">{secondary}</small> : null}
     </div>
   );
 }
@@ -318,22 +357,36 @@ export default function AdminDashboard() {
                 emptyActionHref="/pricing"
                 rows={sessions.data.slice(0, 8).map((s, idx) => ({ ...s, id: `${s.student}-${idx}` }))}
                 columns={[
-                  { key: 'student', label: 'Student' },
-                  { key: 'sport', label: 'Sport' },
+                  {
+                    key: 'started_at',
+                    label: 'Session Time',
+                    render: (row) => renderStack(formatSessionDate(row.started_at ?? row.timestamp), row.created_by ? `Coach ${row.created_by}` : ''),
+                  },
+                  { key: 'student', label: 'Student', render: (row) => renderStack(row.student, row.academy_id || '') },
+                  { key: 'sport', label: 'Sport', render: (row) => <span className="table-chip neutral">{row.sport || '--'}</span> },
                   {
                     key: 'created_by',
                     label: 'Coach',
-                    render: (row) => row.created_by || '--',
+                    render: (row) => <span className="table-text-muted">{row.created_by || '--'}</span>,
                   },
                   {
                     key: 'duration_minutes',
                     label: 'Duration',
-                    render: (row) => (row.duration_minutes ? `${row.duration_minutes} min` : '--'),
+                    render: (row) => <span className="table-chip neutral">{row.duration_minutes ? `${row.duration_minutes} min` : '--'}</span>,
                   },
                   {
-                    key: 'feedback',
-                    label: 'Feedback',
-                    render: (row) => row.feedback?.join(', ') || 'No notes',
+                    key: 'tracking',
+                    label: 'Tracking',
+                    render: (row) => renderTrackingChip(row?.camera_summary?.tracking_quality),
+                  },
+                  {
+                    key: 'drill_focus',
+                    label: 'Session Focus',
+                    render: (row) =>
+                      renderStack(
+                        row.drill_focus || row.custom_note || '--',
+                        Number.isFinite(Number(row.session_score)) ? `Score ${Number(row.session_score).toFixed(0)}` : ''
+                      ),
                   },
                 ]}
               />
@@ -678,11 +731,7 @@ export default function AdminDashboard() {
           ) : null}
 
           {section === 'settings' ? (
-            <div className="panel-grid">
-              <WorkspaceSettingsSection canManageAcademy canManagePlatform />
-              <WorkspaceHelpSection canManage />
-              <ProfileSection />
-            </div>
+            <WorkspaceSettingsSection canManageAcademy canManagePlatform />
           ) : null}
 
           <ConfirmDialog

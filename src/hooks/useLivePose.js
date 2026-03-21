@@ -2,23 +2,34 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 const POSE_CONNECTIONS = [
+  [0, 1], [1, 2], [2, 3], [3, 7],
+  [0, 4], [4, 5], [5, 6], [6, 8],
+  [9, 10],
   [11, 12],
   [11, 13], [13, 15],
   [12, 14], [14, 16],
   [15, 17], [15, 19], [15, 21],
+  [17, 19], [19, 21],
   [16, 18], [16, 20], [16, 22],
+  [18, 20], [20, 22],
   [11, 23], [12, 24],
   [23, 24],
   [23, 25], [25, 27], [27, 29], [29, 31],
+  [27, 31],
   [24, 26], [26, 28], [28, 30], [30, 32],
+  [28, 32],
 ];
 
 const LANDMARK_VIS_THRESHOLD = 0.35;
 const HAND_VIS_THRESHOLD = 0.05;
 const FACE_VIS_THRESHOLD = 0.45;
-const SMOOTHING_ALPHA_BODY = 0.62;
-const SMOOTHING_ALPHA_HAND = 0.72;
+const SMOOTHING_ALPHA_BODY = 0.74;
+const SMOOTHING_ALPHA_HAND = 0.82;
 const MOTION_HISTORY_MAX = 24;
+const CAMERA_METRICS_INTERVAL_FAST = 700;
+const CAMERA_METRICS_INTERVAL_BALANCED = 420;
+const BEST_FRAME_CAPTURE_FAST = 2600;
+const BEST_FRAME_CAPTURE_BALANCED = 1400;
 const PHASES = {
   SETUP: 'setup',
   EXECUTION: 'execution',
@@ -403,7 +414,7 @@ export function useLivePose() {
   const rafIdRef = useRef(null);
   const videoElRef = useRef(null);
   const ruleProfileRef = useRef(null);
-  const landmarkerRef = useRef(null);
+  const landmarkerRef = useRef({});
   const localLoopActiveRef = useRef(false);
   const pausedRef = useRef(false);
   const prevPoseRef = useRef(null);
@@ -484,15 +495,18 @@ export function useLivePose() {
     };
   }, []);
 
-  const initLocalLandmarker = useCallback(async () => {
-    if (landmarkerRef.current) return landmarkerRef.current;
+  const initLocalLandmarker = useCallback(async (modelVariant = 'full') => {
+    const variant = modelVariant === 'lite' ? 'lite' : 'full';
+    if (landmarkerRef.current?.[variant]) return landmarkerRef.current[variant];
     const vision = await FilesetResolver.forVisionTasks(
       'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
     );
     const landmarker = await PoseLandmarker.createFromOptions(vision, {
       baseOptions: {
         modelAssetPath:
-          'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task',
+          variant === 'lite'
+            ? 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task'
+            : 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task',
       },
       runningMode: 'VIDEO',
       numPoses: 1,
@@ -500,7 +514,7 @@ export function useLivePose() {
       minPosePresenceConfidence: 0.5,
       minTrackingConfidence: 0.5,
     });
-    landmarkerRef.current = landmarker;
+    landmarkerRef.current[variant] = landmarker;
     return landmarker;
   }, []);
 
@@ -531,7 +545,8 @@ export function useLivePose() {
         videoEl.srcObject = stream;
         await videoEl.play();
 
-        const landmarker = await initLocalLandmarker();
+        const modelVariant = lowLatency ? 'lite' : 'full';
+        const landmarker = await initLocalLandmarker(modelVariant);
         ruleProfileRef.current = ruleProfile;
         setMode('local');
         setConnected(true);
@@ -544,22 +559,35 @@ export function useLivePose() {
         sessionStartPerfRef.current = performance.now();
         sessionStatsRef.current.phaseEvents = [{ t: 0, phase: PHASES.SETUP }];
         const minInterval = Math.max(20, Math.floor(1000 / Math.max(1, fps)));
+        const cameraMetricsInterval = lowLatency ? CAMERA_METRICS_INTERVAL_FAST : CAMERA_METRICS_INTERVAL_BALANCED;
+        const bestFrameCaptureInterval = lowLatency ? BEST_FRAME_CAPTURE_FAST : BEST_FRAME_CAPTURE_BALANCED;
         let lastAt = 0;
 
-        const loop = () => {
+        const scheduleNext = () => {
+          if (!localLoopActiveRef.current || !videoElRef.current) return;
+          if (typeof videoElRef.current.requestVideoFrameCallback === 'function') {
+            frameCbIdRef.current = videoElRef.current.requestVideoFrameCallback((mediaNow) => loop(mediaNow));
+          } else {
+            rafIdRef.current = requestAnimationFrame((rafNow) => loop(rafNow));
+          }
+        };
+
+        const loop = (frameNow = performance.now()) => {
           if (!localLoopActiveRef.current || !videoElRef.current) return;
           if (pausedRef.current) {
-            rafIdRef.current = requestAnimationFrame(loop);
+            scheduleNext();
             return;
           }
-          const now = performance.now();
+          const now = Number.isFinite(frameNow) ? frameNow : performance.now();
           if (now - lastAt >= minInterval) {
+            const detectStartedAt = performance.now();
             const result = landmarker.detectForVideo(videoElRef.current, now);
+            const inferenceMs = performance.now() - detectStartedAt;
             const pose = result?.landmarks?.[0] || result?.poseLandmarks?.[0] || null;
             const smoothedPose = smoothPose(prevPoseRef.current, pose);
             prevPoseRef.current = smoothedPose;
             let cameraMetrics = cameraMetricsRef.current.value;
-            if (now - cameraMetricsRef.current.lastAt >= 240 || !cameraMetrics) {
+            if (now - cameraMetricsRef.current.lastAt >= cameraMetricsInterval || !cameraMetrics) {
               cameraMetrics = analyzeCameraFrame(videoElRef.current, cameraCanvasRef.current);
               cameraMetricsRef.current = { value: cameraMetrics, lastAt: now };
             }
@@ -627,6 +655,12 @@ export function useLivePose() {
                 ? Number((((motionHistoryRef.current[motionHistoryRef.current.length - 1].y - motionHistoryRef.current[motionHistoryRef.current.length - 2].y)
                   / Math.max(1, (motionHistoryRef.current[motionHistoryRef.current.length - 1].t - motionHistoryRef.current[motionHistoryRef.current.length - 2].t))) * 1000).toFixed(1))
                 : 0,
+            };
+            payload.runtime = {
+              model_variant: modelVariant,
+              inference_ms: Number(inferenceMs.toFixed(1)),
+              cadence_ms: minInterval,
+              target_fps: Math.round(1000 / Math.max(1, minInterval)),
             };
 
             const phase = getPhaseForSport(sport, payload);
@@ -702,7 +736,7 @@ export function useLivePose() {
             }
 
             if (!stat.bestFrame || liveScore > stat.bestFrame.score + 1) {
-              const canCapture = now - lastBestFrameCaptureAtRef.current >= 1200;
+              const canCapture = now - lastBestFrameCaptureAtRef.current >= bestFrameCaptureInterval;
               const thumb = canCapture ? captureFrameThumbnail(videoElRef.current, thumbnailCanvasRef.current) : stat.bestFrame?.thumbnail;
               if (canCapture) lastBestFrameCaptureAtRef.current = now;
               stat.bestFrame = {
@@ -753,9 +787,9 @@ export function useLivePose() {
             setAnalysis(payload);
             lastAt = now;
           }
-          rafIdRef.current = requestAnimationFrame(loop);
+          scheduleNext();
         };
-        rafIdRef.current = requestAnimationFrame(loop);
+        scheduleNext();
       } catch {
         setError('Unable to start browser pose model. Check camera permissions and network for model download.');
         stop();
@@ -767,10 +801,8 @@ export function useLivePose() {
   useEffect(() => {
     return () => {
       stop();
-      if (landmarkerRef.current) {
-        landmarkerRef.current.close();
-        landmarkerRef.current = null;
-      }
+      Object.values(landmarkerRef.current || {}).forEach((instance) => instance?.close?.());
+      landmarkerRef.current = {};
     };
   }, [stop]);
 

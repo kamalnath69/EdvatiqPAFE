@@ -67,12 +67,26 @@ export default function VerifyEmail() {
   return (
     <div className="auth-layout">
       <section className="auth-brand">
+        <div className="auth-logo-lockup">
+          <div className="auth-logo-mark">E</div>
+          <div>
+            <p className="auth-logo-kicker">Performance Intelligence</p>
+            <strong>Edvatiq</strong>
+          </div>
+        </div>
         <p className="auth-chip">Email Verification</p>
         <h1>Confirm your email to activate access.</h1>
         <p>We will send a verification code to complete registration.</p>
       </section>
 
       <section className="auth-card entrance-rise">
+        <div className="auth-card-mini-brand">
+          <div className="auth-logo-mark">E</div>
+          <div>
+            <p className="auth-logo-kicker">Performance Intelligence</p>
+            <strong>Edvatiq</strong>
+          </div>
+        </div>
         <h2>Verify your email</h2>
         <p className="auth-helper">Enter your username or email, then add the code from your inbox.</p>
 

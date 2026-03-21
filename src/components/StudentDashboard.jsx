@@ -11,11 +11,9 @@ import { useSessions } from '../hooks/useSessions';
 import { useRules } from '../hooks/useRules';
 import LiveTrainer from './LiveTrainer';
 import SessionDetailPanel from './SessionDetailPanel';
-import ProfileSection from './ProfileSection';
 import {
   WorkspaceCalendarSection,
   WorkspaceFavoritesPanel,
-  WorkspaceHelpSection,
   WorkspaceNotificationsSection,
   WorkspaceReportsSection,
   WorkspaceSettingsSection,
@@ -55,6 +53,51 @@ function TrendTooltip({ active, payload, label }) {
       <strong>{label}</strong>
       <span>Session score: {scorePoint?.value ?? '--'}</span>
       <span>Reps: {repsPoint?.value ?? '--'}</span>
+    </div>
+  );
+}
+
+function formatSessionDate(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '--';
+  const timestamp = numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+  return new Date(timestamp).toLocaleString();
+}
+
+function renderScoreChip(value) {
+  const numeric = Number(value);
+  const tone = !Number.isFinite(numeric)
+    ? 'neutral'
+    : numeric >= 80
+      ? 'success'
+      : numeric >= 60
+        ? 'primary'
+        : 'warning';
+  return <span className={`table-chip ${tone}`}>{Number.isFinite(numeric) ? numeric.toFixed(0) : '--'}</span>;
+}
+
+function renderTrackingChip(value) {
+  const normalized = String(value || '').trim();
+  const tone =
+    normalized.toLowerCase() === 'high'
+      ? 'success'
+      : normalized.toLowerCase() === 'medium'
+        ? 'primary'
+        : normalized
+          ? 'warning'
+          : 'neutral';
+  return <span className={`table-chip ${tone}`}>{normalized || '--'}</span>;
+}
+
+function renderSportCell(value) {
+  return <span className="table-chip neutral">{value || '--'}</span>;
+}
+
+function renderSessionFocusCell(primary, secondary = '') {
+  return (
+    <div className="table-stack">
+      <strong className="table-text-strong">{primary || '--'}</strong>
+      {secondary ? <small className="table-text-muted">{secondary}</small> : null}
     </div>
   );
 }
@@ -468,30 +511,37 @@ export default function StudentDashboard() {
                 onRowClick={(row) => setSelectedSessionId(row.id)}
                 selectedRowId={selectedSessionId}
                 columns={[
-                  { key: 'sport', label: 'Sport' },
+                  {
+                    key: 'started_at',
+                    label: 'Session Time',
+                    render: (row) => renderSessionFocusCell(formatSessionDate(row.started_at ?? row.timestamp), row.created_by ? `Coach ${row.created_by}` : ''),
+                  },
+                  { key: 'sport', label: 'Sport', render: (row) => renderSportCell(row.sport) },
                   {
                     key: 'session_score',
                     label: 'Score',
-                    render: (row) => row.session_score ?? '--',
+                    render: (row) => renderScoreChip(row.session_score),
                   },
                   {
                     key: 'rep_summary',
                     label: 'Reps',
-                    render: (row) => row.rep_summary?.total_reps ?? '--',
+                    render: (row) => <span className="table-chip neutral">{row.rep_summary?.total_reps ?? '--'} reps</span>,
+                  },
+                  {
+                    key: 'tracking',
+                    label: 'Tracking',
+                    render: (row) => renderTrackingChip(row?.camera_summary?.tracking_quality),
                   },
                   {
                     key: 'drill_focus',
-                    label: 'Drill Focus',
-                    render: (row) => row.drill_focus || '--',
-                  },
-                  {
-                    key: 'feedback',
-                    label: 'Top Feedback',
-                    render: (row) => row.feedback?.[0] || 'No notes',
+                    label: 'Session Focus',
+                    render: (row) => renderSessionFocusCell(row.drill_focus || row.custom_note || '--', row.custom_note && row.drill_focus ? row.custom_note : ''),
                   },
                   {
                     key: 'actions',
                     label: 'Pin',
+                    sortable: false,
+                    searchable: false,
                     render: (row) => (
                       <button
                         type="button"
@@ -593,40 +643,51 @@ export default function StudentDashboard() {
                     onRowClick={(row) => setSelectedSessionId(row.id)}
                     selectedRowId={selectedSessionId}
                     columns={[
-                      { key: 'sport', label: 'Sport' },
+                      {
+                        key: 'started_at',
+                        label: 'Session Time',
+                        render: (row) =>
+                          renderSessionFocusCell(
+                            formatSessionDate(row.started_at ?? row.timestamp),
+                            row.duration_minutes ? `${row.duration_minutes} min` : ''
+                          ),
+                      },
+                      { key: 'sport', label: 'Sport', render: (row) => renderSportCell(row.sport) },
                       {
                         key: 'session_score',
                         label: 'Score',
-                        render: (row) => row.session_score ?? '--',
+                        render: (row) => renderScoreChip(row.session_score),
                       },
                       {
                         key: 'rep_summary',
                         label: 'Reps',
-                        render: (row) => row.rep_summary?.total_reps ?? '--',
+                        render: (row) => <span className="table-chip neutral">{row.rep_summary?.total_reps ?? '--'} reps</span>,
                       },
                       {
-                        key: 'feedback',
-                        label: 'Feedback',
-                        render: (row) => row.feedback?.join(', ') || 'No notes',
+                        key: 'duration',
+                        label: 'Duration',
+                        render: (row) => <span className="table-chip neutral">{row.duration_minutes ? `${row.duration_minutes} min` : '--'}</span>,
                       },
                       {
-                        key: 'angles',
-                        label: 'Angles',
-                        render: (row) => `${Object.keys(row.angles || {}).length} metrics`,
+                        key: 'tracking',
+                        label: 'Tracking',
+                        render: (row) => renderTrackingChip(row?.camera_summary?.tracking_quality),
                       },
                       {
                         key: 'drill_focus',
-                        label: 'Drill Focus',
-                        render: (row) => row.drill_focus || '--',
+                        label: 'Session Focus',
+                        render: (row) => renderSessionFocusCell(row.drill_focus || '--', row.custom_note || ''),
                       },
                       {
                         key: 'custom_note',
                         label: 'Coach Note',
-                        render: (row) => row.custom_note || '--',
+                        render: (row) => <span className="table-text-muted">{row.custom_note || 'Open details for full notes'}</span>,
                       },
                       {
                         key: 'actions',
                         label: 'Pin',
+                        sortable: false,
+                        searchable: false,
                         render: (row) => (
                           <button
                             type="button"
@@ -731,11 +792,7 @@ export default function StudentDashboard() {
           {section === 'notifications' ? <WorkspaceNotificationsSection /> : null}
 
           {section === 'settings' ? (
-            <div className="panel-grid">
-              <WorkspaceSettingsSection />
-              <WorkspaceHelpSection />
-              <ProfileSection />
-            </div>
+            <WorkspaceSettingsSection />
           ) : null}
         </>
       )}

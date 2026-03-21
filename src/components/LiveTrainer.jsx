@@ -6,9 +6,57 @@ import { useLivePose } from '../hooks/useLivePose';
 import { createSession } from '../services/sessionsApi';
 import { getErrorMessage } from '../services/httpError';
 import { getRules } from '../services/rulesApi';
+import { getCoachConfig } from '../services/chatApi';
+import { getLatestHardwareTelemetry } from '../services/hardwareApi';
 import { SPORTS } from '../constants/sports';
 import { ANGLE_METRICS } from '../constants/angles';
 import { useToast } from '../hooks/useToast';
+
+const OVERLAY_SEGMENTS = {
+  face: new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+  core: new Set([11, 12, 23, 24]),
+  leftArm: new Set([11, 13, 15, 17, 19, 21]),
+  rightArm: new Set([12, 14, 16, 18, 20, 22]),
+  leftLeg: new Set([23, 25, 27, 29, 31]),
+  rightLeg: new Set([24, 26, 28, 30, 32]),
+};
+
+const OVERLAY_COLORS = {
+  face: 'rgba(191, 219, 254, 0.78)',
+  core: 'rgba(56, 189, 248, 0.98)',
+  leftArm: 'rgba(96, 165, 250, 0.98)',
+  rightArm: 'rgba(14, 165, 233, 0.98)',
+  leftLeg: 'rgba(45, 212, 191, 0.96)',
+  rightLeg: 'rgba(34, 197, 94, 0.96)',
+  issue: 'rgba(248, 113, 113, 0.99)',
+  neutral: 'rgba(226, 232, 240, 0.8)',
+  glow: 'rgba(8, 47, 73, 0.32)',
+  jointCore: 'rgba(224, 242, 254, 0.94)',
+  torsoFill: 'rgba(14, 165, 233, 0.12)',
+};
+
+function getOverlaySegment(jointIdx) {
+  if (OVERLAY_SEGMENTS.face.has(jointIdx)) return 'face';
+  if (OVERLAY_SEGMENTS.core.has(jointIdx)) return 'core';
+  if (OVERLAY_SEGMENTS.leftArm.has(jointIdx)) return 'leftArm';
+  if (OVERLAY_SEGMENTS.rightArm.has(jointIdx)) return 'rightArm';
+  if (OVERLAY_SEGMENTS.leftLeg.has(jointIdx)) return 'leftLeg';
+  if (OVERLAY_SEGMENTS.rightLeg.has(jointIdx)) return 'rightLeg';
+  return 'core';
+}
+
+function getConnectionStyle(a, b) {
+  const segmentA = getOverlaySegment(a);
+  const segmentB = getOverlaySegment(b);
+  const segment = segmentA === segmentB ? segmentA : 'core';
+  if (segment === 'face') {
+    return { color: OVERLAY_COLORS.face, width: 2.4, glowWidth: 5.2, blur: 4 };
+  }
+  if (segment === 'core') {
+    return { color: OVERLAY_COLORS.core, width: 5.6, glowWidth: 11.5, blur: 9 };
+  }
+  return { color: OVERLAY_COLORS[segment] || OVERLAY_COLORS.neutral, width: 4.8, glowWidth: 9.6, blur: 8 };
+}
 
 function drawOverlay(canvas, payload, fitMode = 'cover', xOffsetPct = 0, yOffsetPct = 0, zoomPct = 100) {
   const ctx = canvas.getContext('2d');
@@ -72,14 +120,27 @@ function drawOverlay(canvas, payload, fitMode = 'cover', xOffsetPct = 0, yOffset
     }
   });
 
-  const drawLink = (a, b, color, width = 9) => {
+  const drawLink = (a, b, color, width = 5, glowWidth = 10, blur = 8) => {
     const p1 = point(a);
     const p2 = point(b);
     if (!p1 || !p2) return;
-    ctx.lineWidth = width;
-    ctx.strokeStyle = color;
+    const gradient = ctx.createLinearGradient(p1[0], p1[1], p2[0], p2[1]);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(1, color);
+
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = glowWidth;
+    ctx.strokeStyle = OVERLAY_COLORS.glow;
     ctx.shadowColor = color;
-    ctx.shadowBlur = 6;
+    ctx.shadowBlur = blur;
+    ctx.beginPath();
+    ctx.moveTo(p1[0], p1[1]);
+    ctx.lineTo(p2[0], p2[1]);
+    ctx.stroke();
+
+    ctx.lineWidth = width;
+    ctx.strokeStyle = gradient;
     ctx.beginPath();
     ctx.moveTo(p1[0], p1[1]);
     ctx.lineTo(p2[0], p2[1]);
@@ -87,16 +148,16 @@ function drawOverlay(canvas, payload, fitMode = 'cover', xOffsetPct = 0, yOffset
     ctx.shadowBlur = 0;
   };
 
-  const leftColor = 'rgba(34, 197, 94, 0.95)';
-  const rightColor = 'rgba(14, 165, 233, 0.95)';
-  const neutralColor = 'rgba(245, 179, 49, 0.9)';
-
-  connections.forEach(([a, b]) => {
-    const bothLeft = [11, 13, 15, 23, 25, 27, 29, 31].includes(a) && [11, 13, 15, 23, 25, 27, 29, 31].includes(b);
-    const bothRight = [12, 14, 16, 24, 26, 28, 30, 32].includes(a) && [12, 14, 16, 24, 26, 28, 30, 32].includes(b);
-    const c = bothLeft ? leftColor : bothRight ? rightColor : neutralColor;
-    drawLink(a, b, c, 9);
-  });
+  const drawBodyPlate = (points, fillColor) => {
+    const validPoints = points.filter(Boolean);
+    if (validPoints.length < 3) return;
+    ctx.beginPath();
+    ctx.moveTo(validPoints[0][0], validPoints[0][1]);
+    validPoints.slice(1).forEach((p) => ctx.lineTo(p[0], p[1]));
+    ctx.closePath();
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+  };
 
   const lShoulder = point(11);
   const rShoulder = point(12);
@@ -104,17 +165,33 @@ function drawOverlay(canvas, payload, fitMode = 'cover', xOffsetPct = 0, yOffset
   const rHip = point(24);
   const lKnee = point(25);
   const rKnee = point(26);
+  drawBodyPlate([lShoulder, rShoulder, rHip, lHip], OVERLAY_COLORS.torsoFill);
+
+  connections.forEach(([a, b]) => {
+    const style = getConnectionStyle(a, b);
+    const incorrectLink = jointStatus[a] === false || jointStatus[b] === false;
+    drawLink(
+      a,
+      b,
+      incorrectLink ? OVERLAY_COLORS.issue : style.color,
+      style.width,
+      style.glowWidth,
+      style.blur
+    );
+  });
   if (lShoulder && rShoulder && lHip && rHip) {
     const shoulderMid = [(lShoulder[0] + rShoulder[0]) / 2, (lShoulder[1] + rShoulder[1]) / 2];
     const hipMid = [(lHip[0] + rHip[0]) / 2, (lHip[1] + rHip[1]) / 2];
     const kneeMid = lKnee && rKnee ? [(lKnee[0] + rKnee[0]) / 2, (lKnee[1] + rKnee[1]) / 2] : null;
     const spineCheck = (analysis || []).find((item) => String(item.name || '').toLowerCase().includes('spine'));
-    const spineColor = spineCheck && spineCheck.correct === false ? 'rgba(239, 68, 68, 0.98)' : 'rgba(16, 185, 129, 0.98)';
+    const spineColor = spineCheck && spineCheck.correct === false ? OVERLAY_COLORS.issue : OVERLAY_COLORS.core;
 
-    ctx.lineWidth = 12;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 13;
     ctx.strokeStyle = spineColor;
     ctx.shadowColor = spineColor;
-    ctx.shadowBlur = 6;
+    ctx.shadowBlur = 10;
     ctx.beginPath();
     ctx.moveTo(shoulderMid[0], shoulderMid[1]);
     ctx.lineTo(hipMid[0], hipMid[1]);
@@ -125,7 +202,7 @@ function drawOverlay(canvas, payload, fitMode = 'cover', xOffsetPct = 0, yOffset
     ctx.fillStyle = spineColor;
     [shoulderMid, hipMid, kneeMid].filter(Boolean).forEach((p) => {
       ctx.beginPath();
-      ctx.arc(p[0], p[1], 9, 0, Math.PI * 2);
+      ctx.arc(p[0], p[1], 7.5, 0, Math.PI * 2);
       ctx.fill();
     });
   }
@@ -136,11 +213,32 @@ function drawOverlay(canvas, payload, fitMode = 'cover', xOffsetPct = 0, yOffset
     const p = point(jointIdx);
     if (!p) return;
     const isHandJoint = [15, 16, 17, 18, 19, 20, 21, 22].includes(jointIdx);
+    const segment = getOverlaySegment(jointIdx);
+    const baseColor = isCorrect ? (OVERLAY_COLORS[segment] || OVERLAY_COLORS.neutral) : OVERLAY_COLORS.issue;
+    const isFace = segment === 'face';
+    const isCore = segment === 'core';
+    const radius = isFace
+      ? (isCorrect ? 3.1 : 3.8)
+      : isHandJoint
+        ? (isCorrect ? 5.8 : 6.6)
+        : isCore
+          ? (isCorrect ? 5.6 : 6.5)
+          : (isCorrect ? 4.8 : 5.8);
     ctx.beginPath();
-    ctx.fillStyle = isCorrect ? '#22c55e' : '#ef4444';
-    const radius = isHandJoint ? (isCorrect ? 10 : 12) : (isCorrect ? 7.5 : 9);
+    ctx.fillStyle = baseColor;
     ctx.arc(p[0], p[1], radius, 0, Math.PI * 2);
     ctx.fill();
+    if (!isFace) {
+      ctx.beginPath();
+      ctx.fillStyle = OVERLAY_COLORS.jointCore;
+      ctx.arc(p[0], p[1], Math.max(1.8, radius * 0.38), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], radius, 0, Math.PI * 2);
+      ctx.strokeStyle = isCorrect ? 'rgba(224, 242, 254, 0.72)' : 'rgba(255, 230, 230, 0.94)';
+      ctx.lineWidth = isCorrect ? 1.1 : 1.6;
+      ctx.stroke();
+    }
   });
 
   const drawJointNote = (jointIdx, notes) => {
@@ -204,6 +302,7 @@ export default function LiveTrainer({
   const [drillFocus, setDrillFocus] = useState('');
   const [intensityRpe, setIntensityRpe] = useState('');
   const [tagsText, setTagsText] = useState('');
+  const [coachConfig, setCoachConfig] = useState(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [savePromptOpen, setSavePromptOpen] = useState(false);
   const [pendingSessionPayload, setPendingSessionPayload] = useState(null);
@@ -213,6 +312,7 @@ export default function LiveTrainer({
   const [fsCameraOpen, setFsCameraOpen] = useState(true);
   const [fsCalibrateOpen, setFsCalibrateOpen] = useState(false);
   const [liveGuidanceState, setLiveGuidanceState] = useState(null);
+  const [hardwareTelemetry, setHardwareTelemetry] = useState(null);
 
   const [overlayXOffsetPct, setOverlayXOffsetPct] = useState(() => {
     const raw = window.localStorage.getItem('live.overlay.xOffsetPct');
@@ -249,8 +349,17 @@ export default function LiveTrainer({
     const score = Number(training?.session_summary?.session_score);
     return Number.isFinite(score) ? score : null;
   }, [training]);
+  const runtime = useMemo(() => analysis?.runtime || {}, [analysis]);
   const overlayFitMode = fullscreen ? 'contain' : 'cover';
   const liveStatusLabel = live.running ? (live.paused ? 'Paused' : 'Tracking Live') : 'Ready';
+  const hardwareTimestamp = Number(hardwareTelemetry?.captured_at || hardwareTelemetry?.updated_at);
+  const hardwareFreshnessLabel = useMemo(() => {
+    if (!Number.isFinite(hardwareTimestamp)) return 'No sensor feed';
+    const ageSeconds = Math.max(0, Math.round(Date.now() / 1000 - hardwareTimestamp));
+    if (ageSeconds < 5) return 'Live now';
+    if (ageSeconds < 60) return `${ageSeconds}s ago`;
+    return `${Math.round(ageSeconds / 60)}m ago`;
+  }, [hardwareTimestamp]);
 
   function getElapsedSeconds(nowMs = Date.now()) {
     const c = clockRef.current;
@@ -331,6 +440,18 @@ export default function LiveTrainer({
         rep_events: summary?.rep_events || [],
         phase_events: summary?.phase_events || [],
       },
+      sensor_summary: hardwareTelemetry
+        ? {
+            source: hardwareTelemetry.source || 'hardware',
+            device_id: hardwareTelemetry.device_id || null,
+            temperature_c: hardwareTelemetry.temperature_c ?? null,
+            pressure_kpa: hardwareTelemetry.pressure_kpa ?? null,
+            humidity_pct: hardwareTelemetry.humidity_pct ?? null,
+            battery_pct: hardwareTelemetry.battery_pct ?? null,
+            captured_at: hardwareTelemetry.captured_at ?? null,
+            updated_at: hardwareTelemetry.updated_at ?? null,
+          }
+        : null,
     };
   }
 
@@ -359,6 +480,58 @@ export default function LiveTrainer({
       drawOverlay(overlayRef.current, analysis, overlayFitMode, overlayXOffsetPct, overlayYOffsetPct, overlayZoomPct);
     }
   }, [analysis, overlayFitMode, overlayXOffsetPct, overlayYOffsetPct, overlayZoomPct]);
+
+  useEffect(() => {
+    let active = true;
+    getCoachConfig()
+      .then((data) => {
+        if (!active) return;
+        setCoachConfig(data);
+        setLiveGuidanceEnabled(data.live_guidance_enabled ? (window.localStorage.getItem('live.aiGuidance.enabled') !== '0') : false);
+        setLiveVoiceEnabled(
+          data.live_guidance_enabled && data.voice_enabled
+            ? (window.localStorage.getItem('live.aiVoice.enabled') !== '0')
+            : false
+        );
+      })
+      .catch(() => {
+        if (!active) return;
+        setCoachConfig(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const targetStudent = student.trim();
+    if (!targetStudent) {
+      setHardwareTelemetry(null);
+      return undefined;
+    }
+
+    let active = true;
+    let timerId;
+
+    const loadTelemetry = async () => {
+      try {
+        const latest = await getLatestHardwareTelemetry(targetStudent);
+        if (!active) return;
+        setHardwareTelemetry(latest || null);
+      } catch {
+        if (!active) return;
+        setHardwareTelemetry(null);
+      }
+    };
+
+    loadTelemetry();
+    timerId = window.setInterval(loadTelemetry, live.running ? 2500 : 6000);
+
+    return () => {
+      active = false;
+      window.clearInterval(timerId);
+    };
+  }, [student, live.running]);
 
   useEffect(() => {
     window.localStorage.setItem('live.aiGuidance.enabled', liveGuidanceEnabled ? '1' : '0');
@@ -400,8 +573,10 @@ export default function LiveTrainer({
   }, [live.running]);
 
   const elapsedLabel = `${String(Math.floor(elapsedSec / 60)).padStart(2, '0')}:${String(elapsedSec % 60).padStart(2, '0')}`;
+  const aiCoachVisible = Boolean(coachConfig?.live_guidance_enabled);
+  const aiVoiceVisible = Boolean(coachConfig?.live_guidance_enabled && coachConfig?.voice_enabled);
   const liveCoachActive = live.running && liveGuidanceEnabled;
-  const liveCoachVoiceActive = live.running && liveGuidanceEnabled && liveVoiceEnabled;
+  const liveCoachVoiceActive = live.running && liveGuidanceEnabled && liveVoiceEnabled && aiVoiceVisible;
 
   async function handleStart() {
     if (!sport.trim()) {
@@ -414,8 +589,8 @@ export default function LiveTrainer({
     }
 
     const streamConfig = performanceMode
-      ? { fps: 22, width: 256, height: 192, lowLatency: true }
-      : { fps: 16, width: 384, height: 288, lowLatency: false };
+      ? { fps: 26, width: 320, height: 240, lowLatency: true }
+      : { fps: 20, width: 480, height: 360, lowLatency: false };
 
     let ruleProfile = null;
     try {
@@ -584,6 +759,21 @@ export default function LiveTrainer({
           <article className="metric-tile"><p>Framing</p><strong>{framing.status || '--'}</strong></article>
         </div>
       </section>
+
+      <section className="live-detail-block">
+        <div className="live-detail-heading">
+          <span>Hardware Telemetry</span>
+          <strong>{hardwareTelemetry ? `Latest sensor feed ${hardwareFreshnessLabel}` : 'No connected telemetry yet'}</strong>
+        </div>
+        <div className="metrics-grid compact">
+          <article className="metric-tile"><p>Temperature</p><strong>{hardwareTelemetry?.temperature_c != null ? `${Number(hardwareTelemetry.temperature_c).toFixed(1)} C` : '--'}</strong></article>
+          <article className="metric-tile"><p>Pressure</p><strong>{hardwareTelemetry?.pressure_kpa != null ? `${Number(hardwareTelemetry.pressure_kpa).toFixed(1)} kPa` : '--'}</strong></article>
+          <article className="metric-tile"><p>Humidity</p><strong>{hardwareTelemetry?.humidity_pct != null ? `${Number(hardwareTelemetry.humidity_pct).toFixed(0)} %` : '--'}</strong></article>
+          <article className="metric-tile"><p>Battery</p><strong>{hardwareTelemetry?.battery_pct != null ? `${Number(hardwareTelemetry.battery_pct).toFixed(0)} %` : '--'}</strong></article>
+          <article className="metric-tile"><p>Source</p><strong>{hardwareTelemetry?.source || '--'}</strong></article>
+          <article className="metric-tile"><p>Device</p><strong>{hardwareTelemetry?.device_id || '--'}</strong></article>
+        </div>
+      </section>
     </div>
   );
 
@@ -660,6 +850,22 @@ export default function LiveTrainer({
             <span>Current Phase</span>
             <strong>{training.phase || '--'}</strong>
           </article>
+          <article className="live-command-metric">
+            <span>Pipeline</span>
+            <strong>{runtime.model_variant === 'lite' ? 'Low latency' : 'Balanced'}</strong>
+          </article>
+          <article className="live-command-metric">
+            <span>Inference</span>
+            <strong>{runtime.inference_ms != null ? `${runtime.inference_ms} ms` : '--'}</strong>
+          </article>
+          <article className="live-command-metric">
+            <span>Temperature</span>
+            <strong>{hardwareTelemetry?.temperature_c != null ? `${Number(hardwareTelemetry.temperature_c).toFixed(1)} C` : '--'}</strong>
+          </article>
+          <article className="live-command-metric">
+            <span>Pressure</span>
+            <strong>{hardwareTelemetry?.pressure_kpa != null ? `${Number(hardwareTelemetry.pressure_kpa).toFixed(1)} kPa` : '--'}</strong>
+          </article>
         </div>
       </section>
 
@@ -679,54 +885,87 @@ export default function LiveTrainer({
             <video ref={videoRef} muted playsInline className="live-video" />
             <canvas ref={overlayRef} className="live-overlay" />
 
-            <div className="live-timer">Session {elapsedLabel}</div>
-            <div className="live-score-chip">Score {sessionScore ?? '--'} / 100</div>
+            <div className="live-stage-hud">
+              <div className="live-stage-hud-card live-stage-hud-card-primary">
+                <span>Session</span>
+                <strong>{elapsedLabel}</strong>
+              </div>
+              <div className="live-stage-hud-card">
+                <span>Score</span>
+                <strong>{sessionScore ?? '--'} / 100</strong>
+              </div>
+              <div className="live-stage-hud-card">
+                <span>Tracking</span>
+                <strong>{advanced.tracking_quality ?? '--'}</strong>
+              </div>
+              <div className="live-stage-hud-card">
+                <span>Latency</span>
+                <strong>{runtime.inference_ms != null ? `${runtime.inference_ms} ms` : '--'}</strong>
+              </div>
+              <div className="live-stage-hud-card">
+                <span>Temperature</span>
+                <strong>{hardwareTelemetry?.temperature_c != null ? `${Number(hardwareTelemetry.temperature_c).toFixed(1)} C` : '--'}</strong>
+              </div>
+              <div className="live-stage-hud-card">
+                <span>Pressure</span>
+                <strong>{hardwareTelemetry?.pressure_kpa != null ? `${Number(hardwareTelemetry.pressure_kpa).toFixed(1)} kPa` : '--'}</strong>
+              </div>
+            </div>
+
+            <div className="live-stage-watermark">
+              <span>Edvatiq Performance Wall</span>
+              <strong>{student || 'Select athlete'} · {sport || 'Select sport'}</strong>
+            </div>
 
             {fullscreen ? (
-              <>
+              <div className="live-fs-dock">
+                {aiCoachVisible ? (
+                  <button
+                    type="button"
+                    className={`live-fs-dock-button ${liveGuidanceEnabled ? 'active' : ''}`}
+                    onClick={() => setLiveGuidanceEnabled((value) => !value)}
+                  >
+                    AI Guide
+                  </button>
+                ) : null}
+                {aiVoiceVisible ? (
+                  <button
+                    type="button"
+                    className={`live-fs-dock-button ${liveVoiceEnabled ? 'active' : ''}`}
+                    onClick={() => setLiveVoiceEnabled((value) => !value)}
+                  >
+                    Voice
+                  </button>
+                ) : null}
                 <button
                   type="button"
-                  className="live-fs-section-toggle live-fs-toggle-guidance"
-                  onClick={() => setLiveGuidanceEnabled((value) => !value)}
-                >
-                  {liveGuidanceEnabled ? 'AI Guide -' : 'AI Guide +'}
-                </button>
-                <button
-                  type="button"
-                  className="live-fs-section-toggle live-fs-toggle-guidance"
-                  onClick={() => setLiveVoiceEnabled((value) => !value)}
-                >
-                  {liveVoiceEnabled ? 'Voice -' : 'Voice +'}
-                </button>
-                <button
-                  type="button"
-                  className="live-fs-section-toggle live-fs-toggle-camera"
+                  className={`live-fs-dock-button ${fsCameraOpen ? 'active' : ''}`}
                   onClick={() => setFsCameraOpen((v) => !v)}
                 >
-                  {fsCameraOpen ? 'Camera -' : 'Camera +'}
+                  Camera
                 </button>
                 <button
                   type="button"
-                  className="live-fs-section-toggle live-fs-toggle-corrections"
+                  className={`live-fs-dock-button ${fsCorrectionsOpen ? 'active' : ''}`}
                   onClick={() => setFsCorrectionsOpen((v) => !v)}
                 >
-                  {fsCorrectionsOpen ? 'Corrections -' : 'Corrections +'}
+                  Corrections
                 </button>
                 <button
                   type="button"
-                  className="live-fs-section-toggle live-fs-toggle-angles"
+                  className={`live-fs-dock-button ${fsAnglesOpen ? 'active' : ''}`}
                   onClick={() => setFsAnglesOpen((v) => !v)}
                 >
-                  {fsAnglesOpen ? 'Angles -' : 'Angles +'}
+                  Angles
                 </button>
                 <button
                   type="button"
-                  className="live-fs-section-toggle live-fs-toggle-calibrate"
+                  className={`live-fs-dock-button ${fsCalibrateOpen ? 'active' : ''}`}
                   onClick={() => setFsCalibrateOpen((v) => !v)}
                 >
-                  {fsCalibrateOpen ? 'Calibrate -' : 'Calibrate +'}
+                  Calibrate
                 </button>
-              </>
+              </div>
             ) : null}
 
             {fullscreen && fsCorrectionsOpen ? (
@@ -784,6 +1023,8 @@ export default function LiveTrainer({
                   <article className="metric-tile"><p>Distance</p><strong>{framing.distance || '--'}</strong></article>
                   <article className="metric-tile"><p>Visibility</p><strong>{live.analysis?.visibility_score ?? '--'}</strong></article>
                   <article className="metric-tile"><p>Occlusion</p><strong>{live.analysis?.occlusion || '--'}</strong></article>
+                  <article className="metric-tile"><p>Temp</p><strong>{hardwareTelemetry?.temperature_c != null ? `${Number(hardwareTelemetry.temperature_c).toFixed(1)} C` : '--'}</strong></article>
+                  <article className="metric-tile"><p>Pressure</p><strong>{hardwareTelemetry?.pressure_kpa != null ? `${Number(hardwareTelemetry.pressure_kpa).toFixed(1)} kPa` : '--'}</strong></article>
                 </div>
               </aside>
             ) : null}
@@ -824,14 +1065,17 @@ export default function LiveTrainer({
               </aside>
             ) : null}
 
-            {fullscreen && liveGuidanceEnabled ? (
+            {fullscreen && aiCoachVisible && liveGuidanceEnabled ? (
               <aside className={`live-fs-drawer live-fs-drawer-left live-fs-drawer-guidance ${liveGuidanceState?.urgency || 'medium'}`}>
                 <h4>Live AI Guidance</h4>
                 <div className="metrics-grid compact">
                   <article className="metric-tile"><p>Status</p><strong>{liveGuidanceState?.speak_now ? 'Speaking' : 'Monitoring'}</strong></article>
+                  <article className="metric-tile"><p>Source</p><strong>{coachConfig?.key_source === 'platform' ? 'Wallet' : 'Personal'}</strong></article>
                   <article className="metric-tile"><p>Phase</p><strong>{training.phase || '--'}</strong></article>
                   <article className="metric-tile"><p>Reps</p><strong>{training.rep_count ?? 0}</strong></article>
                   <article className="metric-tile"><p>Score</p><strong>{sessionScore ?? '--'}</strong></article>
+                  <article className="metric-tile"><p>Temp</p><strong>{hardwareTelemetry?.temperature_c != null ? `${Number(hardwareTelemetry.temperature_c).toFixed(1)} C` : '--'}</strong></article>
+                  <article className="metric-tile"><p>Pressure</p><strong>{hardwareTelemetry?.pressure_kpa != null ? `${Number(hardwareTelemetry.pressure_kpa).toFixed(1)} kPa` : '--'}</strong></article>
                 </div>
                 <div className="live-fs-guidance-card">
                   <strong>{liveGuidanceState?.cue || 'AI coach is monitoring for the next meaningful change.'}</strong>
@@ -853,24 +1097,28 @@ export default function LiveTrainer({
         </section>
       </div>
 
-      <LiveCoachAssist
-        liveRunning={live.running}
-        fullscreen={fullscreen}
-        active={liveCoachActive}
-        voiceActive={liveCoachVoiceActive}
-        sport={analysis?.sport || sport}
-        student={student.trim()}
-        feedback={feedback}
-        angles={analysis?.angles || {}}
-        sessionScore={sessionScore}
-        phase={training.phase || ''}
-        repCount={training.rep_count ?? 0}
-        trackingQuality={advanced.tracking_quality ?? ''}
-        drillFocus={drillFocus}
-        customNote={customNote}
-        pushToast={pushToast}
-        onGuidanceChange={setLiveGuidanceState}
-      />
+      {aiCoachVisible ? (
+        <LiveCoachAssist
+          liveRunning={live.running}
+          fullscreen={fullscreen}
+          active={liveCoachActive}
+          voiceActive={liveCoachVoiceActive}
+          sport={analysis?.sport || sport}
+          student={student.trim()}
+          feedback={feedback}
+          angles={analysis?.angles || {}}
+          sessionScore={sessionScore}
+          phase={training.phase || ''}
+          repCount={training.rep_count ?? 0}
+          trackingQuality={advanced.tracking_quality ?? ''}
+          temperatureC={hardwareTelemetry?.temperature_c ?? null}
+          pressureKpa={hardwareTelemetry?.pressure_kpa ?? null}
+          drillFocus={drillFocus}
+          customNote={customNote}
+          pushToast={pushToast}
+          onGuidanceChange={setLiveGuidanceState}
+        />
+      ) : null}
 
       <section className="panel live-input-panel">
         <div className="panel-header">
@@ -906,14 +1154,18 @@ export default function LiveTrainer({
           <input type="checkbox" checked={performanceMode} onChange={(e) => setPerformanceMode(e.target.checked)} disabled={live.running} />
           <span>Performance Mode {performanceMode ? 'ON' : 'OFF'}</span>
         </label>
-        <label className="check-field live-toggle-row">
-          <input type="checkbox" checked={liveGuidanceEnabled} onChange={(e) => setLiveGuidanceEnabled(e.target.checked)} />
-          <span>Live AI Guidance {liveGuidanceEnabled ? 'ON' : 'OFF'}</span>
-        </label>
-        <label className="check-field live-toggle-row">
-          <input type="checkbox" checked={liveVoiceEnabled} onChange={(e) => setLiveVoiceEnabled(e.target.checked)} />
-          <span>Live Coach Voice {liveVoiceEnabled ? 'ON' : 'OFF'}</span>
-        </label>
+        {aiCoachVisible ? (
+          <label className="check-field live-toggle-row">
+            <input type="checkbox" checked={liveGuidanceEnabled} onChange={(e) => setLiveGuidanceEnabled(e.target.checked)} />
+            <span>Live AI Guidance {liveGuidanceEnabled ? 'ON' : 'OFF'}</span>
+          </label>
+        ) : null}
+        {aiVoiceVisible ? (
+          <label className="check-field live-toggle-row">
+            <input type="checkbox" checked={liveVoiceEnabled} onChange={(e) => setLiveVoiceEnabled(e.target.checked)} />
+            <span>Live Coach Voice {liveVoiceEnabled ? 'ON' : 'OFF'}</span>
+          </label>
+        ) : null}
 
         <div className="calibration-grid">
           <FormField label={`Overlay Horizontal (${overlayXOffsetPct > 0 ? '+' : ''}${overlayXOffsetPct.toFixed(1)}%)`}>
